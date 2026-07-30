@@ -1,5 +1,10 @@
 # ZAMAM V2 Autonomous Progress
 
+## Current checkpoint
+
+- Prompt 10 Project management: **Complete**. Audited lifecycle, scoped membership, explicit client publication, isolated financial data, bounded queries, and 10 focused tests.
+- Prompt 11 Workspace redesign: **In progress**. Tenant context, scoped workspace membership, legacy mapping, API composition, and Gate P11.
+
 آخر تحديث: 2026-07-30
 
 | Prompt | الحالة | الدليل |

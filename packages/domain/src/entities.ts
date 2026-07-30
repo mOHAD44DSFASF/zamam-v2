@@ -22,8 +22,9 @@ export interface TeamMembership extends TenantEntity { teamId: string; userId: s
 
 export interface Client extends TenantEntity, ArchiveFields { name: string; code: string; industry?: string; status: ClientStatus; accountManagerUserId?: string }
 export interface ClientContact extends TenantEntity { clientId: string; name: string; emailHash: string; emailCiphertext: string; encryptionKeyVersion: string; portalStatus: 'none' | 'eligible' | 'invited' | 'active' | 'disabled'; clientAdmin: boolean; userId?: string }
-export interface Project extends TenantEntity, ArchiveFields { clientId: string; name: string; code: string; status: ProjectStatus; departmentId?: string; managerUserId: string; startsOn?: string; dueOn?: string }
-export interface ProjectMember extends TenantEntity { projectId: string; userId: string; access: 'viewer' | 'contributor' | 'manager'; status: 'active' | 'ended' }
+export interface Project extends TenantEntity, ArchiveFields { clientId: string; name: string; code: string; status: ProjectStatus; departmentId?: string; managerUserId: string; startsOn?: string; dueOn?: string; clientVisible: boolean }
+export interface ProjectMember extends TenantEntity { projectId: string; userId: string; contactId?: string; principalType: 'member' | 'client'; access: 'viewer' | 'contributor' | 'manager'; status: 'active' | 'ended' }
+export interface ProjectFinancials extends TenantEntity { projectId: string; currency: string; budgetMinor: number; billingModel: 'fixed' | 'hourly' | 'retainer' | 'non_billable'; status: 'draft' | 'approved' | 'locked' }
 export interface Workspace extends TenantEntity, ArchiveFields { projectId?: string; name: string; status: WorkspaceStatus; visibility: 'private' | 'team' | 'project' }
 
 export interface Task extends TenantEntity, ArchiveFields { projectId: string; workspaceId?: string; parentTaskId?: string; title: string; description: string; status: TaskStatus; priority: 'low' | 'medium' | 'high' | 'urgent'; assigneeUserId?: string; workflowInstanceId?: string; dueAt?: UtcIsoString; completedAt?: UtcIsoString; clientVisible: boolean }
@@ -78,7 +79,7 @@ export interface CustomFieldValue extends TenantEntity { definitionId: string; r
 export const ENTITY_DESCRIPTORS = [
   'organization', 'organization_settings', 'department', 'team', 'user_profile', 'organization_membership', 'invitation', 'employment_profile',
   'role', 'permission_definition', 'role_assignment', 'team_membership', 'client', 'client_contact', 'project',
-  'project_member', 'workspace', 'task', 'subtask', 'checklist', 'checklist_item', 'task_assignment', 'task_watcher',
+  'project_member', 'project_financials', 'workspace', 'task', 'subtask', 'checklist', 'checklist_item', 'task_assignment', 'task_watcher',
   'tag', 'workflow_template', 'workflow_version', 'workflow_stage', 'workflow_transition', 'task_workflow_instance',
   'task_stage_execution', 'review_request', 'approval', 'change_request', 'comment', 'mention', 'reaction', 'attachment',
   'file_version', 'notification', 'notification_preference', 'time_entry', 'timesheet', 'work_schedule', 'attendance_record',

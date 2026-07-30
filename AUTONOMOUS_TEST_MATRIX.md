@@ -1,5 +1,7 @@
 # Autonomous Test Matrix
 
+Latest additions: P10 project service/domain 7 passed; P10 RTL UI/accessibility 3 passed.
+
 | Prompt | المستوى | النطاق | الحالة |
 |---:|---|---|---|
 | Baseline | build/lint/manual smoke | V1 | build pass؛ lint 52 fail؛ no tests |
