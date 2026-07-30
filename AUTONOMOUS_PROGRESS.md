@@ -8,7 +8,8 @@
 - Prompt 14 Workflow builder: **Complete**. Declarative graph validation/simulation, versioned immutable publication with step-up, atomic records, and accessible RTL builder.
 - Prompt 15 Workflow execution engine: **Complete**. Pinned instances, exactly-once guarded transitions, full stage history, rework cycles, SLA breach scan, compatible migrations, and task UI commands.
 - Prompt 16 Reviews and approvals: **Complete**. Version-pinned immutable evidence, single/any/all/ordered policies, stale rejection, changes/resubmit, delegation, expiry, client boundary, RTL inbox.
-- Prompt 17 Templates and recurring work: **In progress**. Versioned task/project templates, timezone recurrence, one logical run per occurrence, pause/catch-up controls.
+- Prompt 17 Templates and recurring work: **Complete / Gate PASS**. Published task/project templates, timezone/DST recurrence, deterministic occurrence runs, bounded catch-up, pause/resume, RTL UI.
+- Prompt 18 Comments and collaboration: **In progress**. Internal/client visibility boundary, mentions, reactions, watchers, activity, edit/tombstone policy.
 
 آخر تحديث: 2026-07-30
 
@@ -23,8 +24,15 @@
 | P7 Organization/departments/teams | Complete | backend-only audited lifecycle، atomic hierarchy counters، multi-team allocation، RTL admin UI، 11 focused tests |
 | P8 Employee management | Complete | compensated invite saga، no client roles، last-Owner/session/multi-tenant identity safety، departure cleanup، schedules، RTL directory |
 | P9 Client management | Complete | client/contact lifecycle، AES-GCM+HMAC PII، no implicit portal grant، archive/revoke، RTL list/detail |
-| P10 Project management | In progress | lifecycle، members، client visibility، financial projections |
-| P11-P28 | Pending | تُنفذ بالتسلسل بعد P10 |
+| P10 Project management | Complete | checkpoint `ae937ed`؛ lifecycle، members، client visibility، financial projections، RTL UI |
+| P11 Workspace redesign | Complete / Gate PASS | checkpoint `beb735d`؛ explicit memberships، tenant context، V1 inventory/quarantine، 5 rules tests |
+| P12 Task core | Complete | checkpoint `5c0ede3`؛ aggregate lifecycle، assignments، subtasks/checklists، RTL create/edit/details |
+| P13 Task views | Complete | checkpoint `23e9e4c`؛ bounded scoped queries، saved views، URL list/board/calendar/timeline |
+| P14 Workflow builder | Complete | checkpoint `548cb93`؛ graph validation/simulation، immutable publication، RTL builder |
+| P15 Workflow execution | Complete | checkpoint `3a89014`؛ pinned versions، exactly-once transitions، stage history، SLA |
+| P16 Reviews/approvals | Complete | checkpoint `bc2f585`؛ immutable version evidence، policies/delegation/expiry، RTL inbox |
+| P17 Templates/recurrence | Complete / Gate PASS | 10 focused tests؛ DST، deterministic dedupe، pause/resume، bounded scheduler، RTL/axe؛ 286 suite + 5 emulator |
+| P18-P28 | Pending | التنفيذ متسلسل بعد Gate P17 |
 
 ## Baseline recovery
 
@@ -33,9 +41,9 @@
 ## أحدث فحوص
 
 - `npm.cmd ci --ignore-scripts`: Passed؛ lockfile قابل لإعادة الإنتاج.
-- `npm.cmd run check`: Passed بعد clean install.
-- `npm.cmd test`: 160/160 passed، ولا يوجد skipped critical test.
-- `npm.cmd run test:emulator`: 4/4 Firestore rules tests passed على JRE محلي معزول.
-- `npm.cmd run build && npm.cmd run check:bundle`: Passed؛ entry = 8.2 KB، أكبر vendor chunk = 345.8 KB.
+- `npm.cmd run check`: Passed في P17: typecheck + lint + 31 test files + build + bundle.
+- `npm.cmd test`: 286/286 passed، ولا يوجد skipped critical test.
+- `npm.cmd run test:emulator`: 5/5 Firestore rules tests passed على JRE محلي معزول.
+- `npm.cmd run build && npm.cmd run check:bundle`: Passed؛ entry = 11.84 KB، أكبر vendor chunk = 345.83 KB.
 - `npm.cmd audit --omit=dev`: لا Critical؛ 2 High و6 Moderate معروفة ومقيدة في المخاطر.
 - secret-pattern scan لنطاق التطبيق والوثائق: صفر نتيجة.

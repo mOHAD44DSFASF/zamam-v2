@@ -17,6 +17,7 @@ const generalManager = owner.filter((permission) => !governance.has(permission))
 const departmentManager = unique(basic, selfService, taskExecutor, teamOperations, [
   'department.view', 'department.manage', 'team.create', 'team.archive', 'client.view', 'project.create', 'project.manage',
   'project.member.manage', 'workspace.create', 'workspace.manage', 'workspace.member.manage', 'task.archive', 'task.reopen',
+  'template.view', 'template.create', 'template.manage', 'recurrence.manage',
   'workflow.view', 'workflow.create', 'workflow.manage', 'review.request', 'review.cancel', 'change_request.resolve',
   'report.view_department', 'goal.view', 'goal.manage', 'kpi.view_team',
 ])

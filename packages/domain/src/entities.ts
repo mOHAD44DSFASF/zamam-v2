@@ -76,6 +76,9 @@ export interface Webhook extends TenantEntity, ArchiveFields { integrationId: st
 export interface SavedView extends TenantEntity { ownerUserId: string; resourceType: string; name: string; filters: Readonly<Record<string, unknown>>; visibility: 'private' | 'team' | 'organization' }
 export interface CustomFieldDefinition extends TenantEntity, ArchiveFields { resourceType: string; key: string; name: string; fieldType: 'text' | 'number' | 'date' | 'select' | 'boolean'; required: boolean; options?: readonly string[] }
 export interface CustomFieldValue extends TenantEntity { definitionId: string; resourceType: string; resourceId: string; value: unknown }
+export interface WorkTemplate extends TenantEntity, ArchiveFields { name: string; templateType: 'task' | 'project'; status: 'draft' | 'published' | 'archived'; payload: Readonly<Record<string, unknown>>; workflowVersionId?: string; publishedAt?: UtcIsoString; publishedBy?: string }
+export interface RecurrenceSchedule extends TenantEntity, ArchiveFields { templateId: string; status: 'active' | 'paused' | 'archived'; timezone: string; frequency: 'daily' | 'weekly' | 'monthly'; interval: number; timeLocal: string; daysOfWeek?: readonly number[]; dayOfMonth?: number; nextRunAt: UtcIsoString; runAsUserId: string; scopeType: 'organization' | 'department' | 'team' | 'project'; scopeId: string }
+export interface RecurrenceRun extends TenantEntity { scheduleId: string; templateId: string; occurrenceAt: UtcIsoString; status: 'started' | 'completed' | 'failed'; generatedResourceType?: string; generatedResourceId?: string; errorCode?: string }
 
 export const ENTITY_DESCRIPTORS = [
   'organization', 'organization_settings', 'department', 'team', 'user_profile', 'organization_membership', 'invitation', 'employment_profile',
@@ -87,6 +90,7 @@ export const ENTITY_DESCRIPTORS = [
   'leave_type', 'leave_request', 'holiday', 'capacity_plan', 'goal', 'kpi_definition', 'kpi_measurement', 'automation',
   'automation_run', 'ai_request', 'ai_action_proposal', 'audit_event', 'integration', 'webhook', 'saved_view',
   'custom_field_definition', 'custom_field_value',
+  'work_template', 'recurrence_schedule', 'recurrence_run',
 ] as const
 
 export type TenantEntityKind = typeof ENTITY_DESCRIPTORS[number]

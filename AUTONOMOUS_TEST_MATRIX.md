@@ -1,6 +1,6 @@
 # Autonomous Test Matrix
 
-Latest additions: P16 review/approval policies and lifecycle 9 passed; RTL review inbox accessibility/decision 2 passed.
+Latest additions: P17 template/recurrence domain and service 8 passed; RTL template UI accessibility/create 2 passed. Full suite 286/286 and emulator 5/5.
 
 | Prompt | المستوى | النطاق | الحالة |
 |---:|---|---|---|
@@ -30,5 +30,20 @@ Latest additions: P16 review/approval policies and lifecycle 9 passed; RTL revie
 | P8 | RTL UI/accessibility | sanitized directory، invite without role، sensitive disable confirmation، axe | 3 pass |
 | P9 | client lifecycle/security | tenant isolation، AES-GCM/HMAC، no portal grant، eligibility/revoke/archive، projections | 7 pass |
 | P9 | RTL UI/accessibility | list/detail، contact without invitation، separate eligibility، axe | 3 pass |
+| P10 | domain/service | project lifecycle، membership، client scope، financial projection | pass |
+| P10 | RTL UI/accessibility | project list/details/actions، capability states، axe | pass |
+| P11 | domain/migration | workspace membership، tenant context، deterministic inventory/quarantine/rollback | 13 pass |
+| P11 | emulator/security gate | forged claims، tenant isolation، recursive client-write deny | 5 pass |
+| P12 | domain/service | task lifecycle، optimistic concurrency، assignments، subtasks/checklists | pass |
+| P12 | RTL UI/accessibility | create/edit/details and capability states | pass |
+| P13 | query/service/UI | bounded scoped task queries، search boundary، saved/URL views | pass |
+| P14 | workflow definition | graph validation، simulation، immutable publication، step-up | pass |
+| P14 | RTL UI/accessibility | builder load/edit/simulate/publish states، axe | pass |
+| P15 | workflow execution | pinned version، exactly-once transition، rework، SLA، history | pass |
+| P16 | review/approval | 4 policies، stale evidence، delegation، expiry، client boundary | 9 pass |
+| P16 | RTL UI/accessibility | review evidence and decision flow، axe | 2 pass |
+| P17 | template/recurrence | publish step-up، DST، catch-up bound، deterministic run، pause/resume/query | 8 pass |
+| P17 | RTL UI/accessibility | inventory، create command، permission states، axe | 2 pass |
+| P17 Gate | full quality | typecheck، lint، 286 tests، build، bundle، 5 emulator rules | PASS |
 
 يُوسّع الجدول عند بدء كل Prompt، ولا يُعتبر Prompt مكتملاً دون evidence قابل للتكرار.

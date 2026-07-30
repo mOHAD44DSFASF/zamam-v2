@@ -12,6 +12,8 @@ export const PERMISSIONS = [
   'project.view', 'project.create', 'project.manage', 'project.archive', 'project.reopen',
   'project.member.manage', 'project.financial.view', 'project.financial.manage',
   'workspace.view', 'workspace.create', 'workspace.manage', 'workspace.archive', 'workspace.member.manage',
+  'template.view', 'template.create', 'template.manage', 'template.publish', 'template.archive',
+  'recurrence.manage', 'recurrence.run',
   'task.view', 'task.view_all', 'task.create', 'task.update', 'task.archive', 'task.delete',
   'task.assign', 'task.reassign', 'task.claim', 'task.transition', 'task.override_transition',
   'task.reopen', 'task.approve', 'task.bulk_manage', 'subtask.manage',
@@ -48,6 +50,7 @@ export const SENSITIVE_PERMISSIONS: ReadonlySet<Permission> = new Set([
   'organization.manage', 'organization.suspend', 'security.policy.manage', 'audit.export',
   'support.access.grant', 'user.disable', 'role.manage', 'role.assign', 'task.delete',
   'task.override_transition', 'task.reopen', 'task.approve', 'file.client.share',
+  'template.publish',
   'report.export', 'automation.publish', 'ai.action.approve', 'ai.policy.manage',
   'integration.credential.rotate', 'platform.tenant.provision', 'platform.tenant.support', 'platform.incident.manage',
 ])
