@@ -9,8 +9,9 @@
 | P3 Authentication foundation | Complete | fail-closed guards، session read model، invite/reset adapters، 11 auth tests، browser evidence |
 | P4 Trusted backend foundation | Complete | Functions adapter، transport-neutral API، idempotency/outbox ports، worker retry/dead-letter، runtime import smoke |
 | P5 Permission and authorization | Complete | 162-permission catalog، scoped engine، default/custom roles، anti-escalation، recursive client-write deny |
-| P6 V2 schema/converters/audit | In progress | canonical timestamps، converters، repositories، transactional audit/outbox، migration versioning |
-| P7-P28 | Pending | تُنفذ بالتسلسل بعد Gate P6 |
+| P6 V2 schema/converters/audit | Complete | Gate P6 PASS؛ 60 tenant entity kinds، 160 tests، 4 emulator rules tests، clean install، backup/restore/rollback |
+| P7 Organization/departments/teams | In progress | lifecycle services، hierarchy، membership، scoped UI |
+| P8-P28 | Pending | تُنفذ بالتسلسل بعد P7 |
 
 ## Baseline recovery
 
@@ -18,8 +19,10 @@
 
 ## أحدث فحوص
 
-- `npm.cmd run typecheck`: Passed.
-- `npm.cmd run lint`: Passed مع waiver محدود لخمسة ملفات V1.
-- `npm.cmd test`: 10 passed.
-- `npm.cmd run build`: Passed؛ بقي تحذير chunk بحجم يقارب 807 KB.
-- `npm.cmd audit fix`: خفّض النتائج من 9 إلى 2 High متعلقين بـ React Router؛ لا `--force`.
+- `npm.cmd ci --ignore-scripts`: Passed؛ lockfile قابل لإعادة الإنتاج.
+- `npm.cmd run check`: Passed بعد clean install.
+- `npm.cmd test`: 160/160 passed، ولا يوجد skipped critical test.
+- `npm.cmd run test:emulator`: 4/4 Firestore rules tests passed على JRE محلي معزول.
+- `npm.cmd run build && npm.cmd run check:bundle`: Passed؛ entry = 8.2 KB، أكبر vendor chunk = 345.8 KB.
+- `npm.cmd audit --omit=dev`: لا Critical؛ 2 High و6 Moderate معروفة ومقيدة في المخاطر.
+- secret-pattern scan لنطاق التطبيق والوثائق: صفر نتيجة.

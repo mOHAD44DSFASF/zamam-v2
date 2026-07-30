@@ -9,13 +9,18 @@
 | P3 | unit | session decisions، revoked token، disable/reset service | 8 pass |
 | P3 | DOM integration | anonymous/inactive/active route guard | 3 pass |
 | P3 | browser smoke | login، reset، invalid invite، workspace redirect | pass؛ screenshots في `docs/v2/evidence/p3` |
-| P3 | emulator | fixtures/config complete؛ execution deferred لعدم توفر Java محلياً | partial؛ Auth emulator لا يكفي Firestore rules |
+| P3/P6 | emulator | Firestore deny-default، self session view، forged claims، cross-tenant | 4 pass على emulator فعلي |
 | P4 | contract/local integration | envelope، validation، auth/App Check، CORS، idempotency، outbox | 7 pass |
 | P4 | unit | redaction، worker completion/retry/dead-letter | 3 pass |
 | P4 | runtime smoke | compiled Functions/worker imports + `/health` | pass |
 | P5 | policy matrix | 10 roles cross-tenant + disabled، scope/deny/client/platform/step-up | 47 pass |
 | P5 | service/static rules | role assignment anti-escalation/version/audit + Firestore default deny | 5 pass |
 | P5 | runtime smoke | compiled authorization catalog/defaults/legacy mapping | pass |
-| P6 | converter/emulator/audit tests | canonical schema and outbox | pending |
+| P6 | schema/converter | 60 tenant entities، timestamps، immutable/version rules، pagination | 67 table-driven checks ضمن suite ناجحة |
+| P6 | repository/data rehearsal | backup checksum/count/tenant، restore، migration dry-run/write/quarantine/rollback | pass |
+| P6 | audit transaction | permission coverage 100%، append/outbox/idempotency، rollback/failure event | pass |
+| P6 | accessibility | login/reset/invitation axe checks | 3 pass |
+| P6 | clean-install gate | `npm ci` ثم typecheck/lint/unit/build/bundle/emulator | pass؛ 160 unit/integration + 4 rules |
+| P6 | performance budget | bounded query limit + web JS/image artifact budgets | pass؛ entry 8.2 KB، max JS 345.8 KB |
 
 يُوسّع الجدول عند بدء كل Prompt، ولا يُعتبر Prompt مكتملاً دون evidence قابل للتكرار.

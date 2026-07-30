@@ -1,28 +1,40 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { ProtectedRoute } from './auth/ProtectedRoute'
 import { PublicOnlyRoute } from './auth/PublicOnlyRoute'
-import { AdministrationUnavailable } from './pages/AdministrationUnavailable'
-import { EmployeeWorkspace } from './pages/EmployeeWorkspace'
-import { InvitationAcceptance } from './pages/InvitationAcceptance'
-import { Login } from './pages/Login'
-import { PasswordReset } from './pages/PasswordReset'
+
+const AdministrationUnavailable = lazy(() => import('./pages/AdministrationUnavailable').then((module) => ({ default: module.AdministrationUnavailable })))
+const EmployeeWorkspace = lazy(() => import('./pages/EmployeeWorkspace').then((module) => ({ default: module.EmployeeWorkspace })))
+const InvitationAcceptance = lazy(() => import('./pages/InvitationAcceptance').then((module) => ({ default: module.InvitationAcceptance })))
+const Login = lazy(() => import('./pages/Login').then((module) => ({ default: module.Login })))
+const PasswordReset = lazy(() => import('./pages/PasswordReset').then((module) => ({ default: module.PasswordReset })))
+
+function RouteLoading() {
+  return (
+    <div dir="rtl" role="status" aria-live="polite" className="min-h-screen grid place-items-center bg-gray-50 text-gray-700">
+      جارٍ التحميل...
+    </div>
+  )
+}
 
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route element={<PublicOnlyRoute />}>
-          <Route path="/login" element={<Login />} />
-          <Route path="/password-reset" element={<PasswordReset />} />
-          <Route path="/invitations/accept" element={<InvitationAcceptance />} />
-        </Route>
-        <Route element={<ProtectedRoute />}>
-          <Route path="/workspace" element={<EmployeeWorkspace />} />
-          <Route path="/admin" element={<AdministrationUnavailable />} />
-        </Route>
-        <Route path="/" element={<Navigate to="/workspace" replace />} />
-        <Route path="*" element={<Navigate to="/workspace" replace />} />
-      </Routes>
+      <Suspense fallback={<RouteLoading />}>
+        <Routes>
+          <Route element={<PublicOnlyRoute />}>
+            <Route path="/login" element={<Login />} />
+            <Route path="/password-reset" element={<PasswordReset />} />
+            <Route path="/invitations/accept" element={<InvitationAcceptance />} />
+          </Route>
+          <Route element={<ProtectedRoute />}>
+            <Route path="/workspace" element={<EmployeeWorkspace />} />
+            <Route path="/admin" element={<AdministrationUnavailable />} />
+          </Route>
+          <Route path="/" element={<Navigate to="/workspace" replace />} />
+          <Route path="*" element={<Navigate to="/workspace" replace />} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   )
 }

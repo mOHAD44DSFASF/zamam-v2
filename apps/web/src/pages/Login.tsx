@@ -5,8 +5,8 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { browserLocalPersistence, browserSessionPersistence, setPersistence, signInWithEmailAndPassword } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
 import { auth } from '../lib/firebase';
-import zamamLogo from '../assets/ZAMAM/2.png';
-import zamamIcon from '../assets/ZAMAM/1T.png';
+import zamamLogo from '../assets/ZAMAM/2-optimized.webp';
+import zamamIcon from '../assets/ZAMAM/1T-optimized.webp';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -93,11 +93,11 @@ export const Login: React.FC = () => {
 
             <form onSubmit={handleLogin} className="space-y-5 lg:space-y-8">
               <div className="space-y-2">
-                <label className="text-sm font-bold text-zamam-textDark block text-right mr-1">البريد الإلكتروني</label>
+                <label htmlFor="login-email" className="text-sm font-bold text-zamam-textDark block text-right mr-1">البريد الإلكتروني</label>
                 <div className="relative group">
                   <Mail className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zamam-textGray group-focus-within:text-zamam-primary transition-colors" />
                   <input 
-                    type="email" required
+                    id="login-email" type="email" required
                     className="w-full pr-14 pl-6 py-3.5 lg:py-4 bg-zamam-light/50 border-2 border-transparent focus:border-zamam-primary/30 focus:bg-white rounded-2xl transition-all outline-none text-zamam-textDark text-right text-base lg:text-lg placeholder:text-gray-300"
                     placeholder="email@example.com"
                     value={email} onChange={(e) => setEmail(e.target.value)}
@@ -106,17 +106,18 @@ export const Login: React.FC = () => {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-bold text-zamam-textDark block text-right mr-1">كلمة المرور</label>
+                <label htmlFor="login-password" className="text-sm font-bold text-zamam-textDark block text-right mr-1">كلمة المرور</label>
                 <div className="relative group">
                   <Lock className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zamam-textGray group-focus-within:text-zamam-primary transition-colors" />
                   <input 
-                    type={showPassword ? "text" : "password"} required
+                    id="login-password" type={showPassword ? "text" : "password"} required
                     className="w-full pr-14 pl-12 py-3.5 lg:py-4 bg-zamam-light/50 border-2 border-transparent focus:border-zamam-primary/30 focus:bg-white rounded-2xl transition-all outline-none text-zamam-textDark text-right text-base lg:text-lg placeholder:text-gray-300"
                     placeholder="••••••••"
                     value={password} onChange={(e) => setPassword(e.target.value)}
                   />
                   <button 
                     type="button"
+                    aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute left-4 top-1/2 -translate-y-1/2 text-zamam-textGray hover:text-zamam-primary transition-colors"
                   >

@@ -1,5 +1,5 @@
-import { defineConfig } from 'vitest/config'
 import { fileURLToPath } from 'node:url'
+import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   resolve: {
@@ -11,9 +11,5 @@ export default defineConfig({
       '@zamam/observability': fileURLToPath(new URL('./packages/observability/src/index.ts', import.meta.url)),
     },
   },
-  test: {
-    include: ['tests/**/*.test.{ts,tsx}', 'packages/**/*.test.{ts,tsx}', 'services/**/*.test.{ts,tsx}'],
-    exclude: ['tests/**/*.emulator.test.ts'],
-    coverage: { reporter: ['text', 'json-summary'] },
-  },
+  test: { include: ['tests/**/*.emulator.test.ts'] },
 })

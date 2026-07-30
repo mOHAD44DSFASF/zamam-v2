@@ -1,5 +1,7 @@
 # نموذج البيانات الدائم لـZAMAM V2
 
+> **حالة التنفيذ (P6):** base schema، entity registry، canonical converters، repository contracts، atomic audit/outbox/idempotency، backup/restore، وmigration preview منفذة. راجع `SCHEMA_IMPLEMENTATION.md`. الـ namespace الحالية `v2Organizations` staging فقط.
+
 > **Proposed V2، Firestore-compatible.** لا ينشئ هذا المستند collections أو indexes. كل writes التجارية عبر backend. يظل Firestore operational store، مع قابلية نقل analytics المعقدة لاحقاً.
 
 ## 1. قرارات التخزين
@@ -239,4 +241,3 @@ Firestore مناسب للـrealtime operational work والdocument aggregates. 
 - strict uniqueness عبر tenant.
 
 القرار المقترح: Firestore أولاً + BigQuery analytics export؛ لا polyglot transactional store قبل قياس الحاجة. إذا أصبحت HR/financial وظائف نظام record قانوني، افصل bounded context علائقي عبر events بدل dual writes غير المنضبط.
-
