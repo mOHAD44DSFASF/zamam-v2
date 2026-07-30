@@ -126,8 +126,9 @@ Global collections محدودة:
 | `attachment/{fileId}` file aggregate | `resourceType*,resourceId*,displayName*,visibility*,status*,retentionState*,latestVersionId?,latestVersionNumber*,pendingVersionId?,purgeAfter?` | resource+status+visibility+updatedAt؛ retentionState+purgeAfter | CMD/JOB؛ private only؛ 30d soft delete/legal hold/two-phase purge؛ AE؛ legacy URL quarantine |
 | `file_version/{id}` | `fileId*,versionNumber*,provider*,objectKey*,checksumSha256*,sizeBytes*,contentType*,scanStatus*,status*,uploadedBy*,scanReportHash?` | fileId+version desc؛ scanStatus+status | finalize/scan worker؛ object immutable؛ clean-only download؛ AE؛ high storage not doc size |
 | `resourceAttachments/{id}` | `resourceType*,resourceId*,fileId*,visibility*,status*` | resource+visibility+createdAt; fileId | CMD؛ archive; AE |
-| `notifications/{id}` | `recipientId*,type*,titleKey*,payloadRef:m*,status*,deliveryState*,readAt?` | recipient+status+createdAt desc | JOB; TTL/archive 90d proposed OD-NOT-01؛ high |
-| `notificationPreferences/{id}` | `userId*,eventType*,channels:m*,digest*,quietHours:m?` | user+eventType | CMD; retain membership lifetime; AE admin override |
+| `notification/{id}` | `recipientUserId*,sourceEventId*,eventType*,dedupeKey*,titleKey*,previewKey?,status*,deliveryState*,inAppVisible*,locale*,visibility*,resourceType?,resourceId?,readAt?,archivedAt?` | recipientUserId+inAppVisible+status+createdAt desc | JOB فقط؛ TTL/archive 90d مقترح OD-NOT-01؛ يمنع raw event payload |
+| `notification_preference/{id}` | `userId*,eventType*,inApp*,email*,digest*,timezone*,quietHoursStart?,quietHoursEnd?` | userId+eventType unique | owner CMD؛ critical policy لا يقبل الكتم؛ retain membership lifetime |
+| `notification_delivery/{id}` | `notificationId*,recipientUserId*,channel*,status*,availableAt*,attemptCount*,digest*,locale*,critical*,providerMessageId?,deliveredAt?,lastErrorCode?` | status+availableAt asc؛ recipient+digest+availableAt | JOB/worker؛ retry ثم DLQ؛ operational TTL بعد التحقيق |
 
 ## 8. Time, HR, Reporting and Intelligence
 
@@ -197,7 +198,8 @@ Global collections محدودة:
 | Overdue | tasks | `organizationId + status + dueAt` مع statuses نشطة مجزأة إذا لزم |
 | Review Queue | reviewRequests | `organizationId + reviewerIds(array) + status + dueAt` |
 | Approval Queue | reviewRequests/approvals slots projection | `organizationId + approverIds(array) + status + dueAt` |
-| Notifications | notifications | `organizationId + recipientId + status + createdAt(desc)` |
+| Notifications | notification | `organizationId + recipientUserId + inAppVisible + status + createdAt(desc)` |
+| Notification delivery | notification_delivery | `organizationId + status + availableAt(asc)` |
 | Attendance | attendanceRecords | `organizationId + teamId/departmentId + workDate(desc) + status` |
 | Leave | leaveRequests | `organizationId + approverIds(array) + status + startAt` |
 | Time reports | timeEntries | `organizationId + projectId/userId + status + startedAt` |

@@ -63,7 +63,7 @@ Dashboard، Projects، Requests، Approvals، Deliveries، Notifications، Profi
 | `/auth/invitations/:token` Invitation Acceptance | invited user | invite summary بعد token verify، profile/password/consent | expired/used states + resend path؛ AE accept/decline |
 | `/o/:slug/home` Dashboard | كل member؛ widgets scoped | My priorities، due، blockers، approvals، workload summary حسب permission؛ period/team filters | empty onboarding؛ widget partial errors؛ no fabricated zero؛ exports audited |
 | `/o/:slug/inbox` Inbox | members | assignments، mentions، review/approval requests، system alerts؛ type/status/date | empty "لا عناصر"؛ bulk read low-risk؛ deep links keyboard |
-| `/o/:slug/notifications` Notifications | members | notification list، read/archive، preferences link | cursor pagination؛ failed delivery لا يكشف provider detail |
+| `/notifications` Notifications (مسار التنفيذ الحالي؛ tenant من trusted context) | members وclient projection | inbox، read/archive، preferences، quiet hours/digest | limit 50 ثم cursor؛ failed delivery لا يكشف provider detail؛ email fail-closed |
 
 ### Work and Task Views
 

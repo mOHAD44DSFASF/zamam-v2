@@ -38,6 +38,7 @@ export const PERMISSIONS = [
   'report.view_self', 'report.view_team', 'report.view_department', 'report.view_organization',
   'report.export', 'performance.sensitive.view',
   'notification.view', 'notification.manage_preferences', 'notification.admin_retry',
+  'notification.deliver', 'notification.policy.manage',
   'automation.view', 'automation.create', 'automation.manage', 'automation.publish', 'automation.execute', 'automation.cancel',
   'ai.use', 'ai.view_history', 'ai.action.approve', 'ai.policy.manage',
   'integration.view', 'integration.manage', 'integration.credential.rotate',

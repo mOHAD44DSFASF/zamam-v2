@@ -1,6 +1,11 @@
 # Autonomous Test Matrix
 
-Latest additions: P19 secure file lifecycle 9 passed; workers 3; R2 SigV4 contract 4; RTL file library 3. Full suite 318/318.
+Latest additions: P20 notification projection/delivery 11 passed; RTL notification center 3. Full suite 333/333; emulator 5/5.
+
+| P20 | domain/service/security | outbox projection، audience access، minimized payload، deterministic dedupe، critical override، quiet hours، bounded queries | 7 pass |
+| P20 | delivery/provider | digest grouping، safe locale content، SHA-256 idempotency، retry، DLQ، mocked Resend 429 | 4 pass |
+| P20 | RTL UI/accessibility | inbox status، preferences، provider fail-closed، axe | 3 pass |
+| P20 Gate | full quality | typecheck، lint، 333 tests، build/bundle، 5 emulator rules، secret-pattern scan | PASS |
 
 | Prompt | المستوى | النطاق | الحالة |
 |---:|---|---|---|

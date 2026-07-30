@@ -52,8 +52,9 @@ export interface Reaction extends TenantEntity { commentId: string; userId: stri
 export interface Attachment extends TenantEntity { resourceType: 'task' | 'project'; resourceId: string; fileId: string; displayName: string; visibility: 'internal' | 'client'; status: FileStatus; retentionState: 'active' | 'deleted' | 'legal_hold' | 'purging' | 'purged'; latestVersionId?: string; latestVersionNumber: number; pendingVersionId?: string; deletedAt?: UtcIsoString; purgeAfter?: UtcIsoString }
 export interface FileVersion extends TenantEntity { fileId: string; versionNumber: number; provider: string; objectKey: string; sizeBytes: number; contentType: string; checksumSha256: string; scanStatus: 'pending' | 'clean' | 'infected' | 'error'; status: FileStatus; uploadedBy: string; scanReportHash?: string }
 
-export interface Notification extends TenantEntity { userId: string; type: string; title: string; status: NotificationStatus; resourceType?: string; resourceId?: string; readAt?: UtcIsoString }
-export interface NotificationPreference extends TenantEntity { userId: string; channel: 'in_app' | 'email'; eventType: string; enabled: boolean }
+export interface Notification extends TenantEntity { recipientUserId: string; eventType: string; dedupeKey: string; titleKey: string; previewKey?: string; status: NotificationStatus; deliveryState: 'suppressed' | 'in_app_only' | 'queued' | 'delivered' | 'failed'; inAppVisible: boolean; locale: 'ar' | 'en'; resourceType?: string; resourceId?: string; visibility: 'internal' | 'client'; readAt?: UtcIsoString; archivedAt?: UtcIsoString }
+export interface NotificationPreference extends TenantEntity { userId: string; eventType: string; inApp: boolean; email: boolean; digest: 'immediate' | 'daily' | 'weekly' | 'never'; timezone: string; quietHoursStart?: string; quietHoursEnd?: string }
+export interface NotificationDelivery extends TenantEntity { notificationId: string; recipientUserId: string; channel: 'email'; status: 'pending' | 'processing' | 'delivered' | 'failed' | 'dead_letter' | 'suppressed'; availableAt: UtcIsoString; attemptCount: number; providerMessageId?: string; deliveredAt?: UtcIsoString; lastErrorCode?: string }
 export interface TimeEntry extends TenantEntity { userId: string; taskId?: string; projectId: string; startedAt: UtcIsoString; endedAt?: UtcIsoString; minutes: number; status: TimeEntryStatus }
 export interface Timesheet extends TenantEntity { userId: string; periodStart: string; periodEnd: string; status: TimesheetStatus; submittedAt?: UtcIsoString; approvedAt?: UtcIsoString }
 export interface WorkSchedule extends TenantEntity { userId: string; timezone: string; weeklyMinutes: number; effectiveFrom: string; effectiveTo?: string }
@@ -86,7 +87,7 @@ export const ENTITY_DESCRIPTORS = [
   'project_member', 'project_financials', 'workspace', 'workspace_member', 'task', 'subtask', 'checklist', 'checklist_item', 'task_assignment', 'task_watcher',
   'tag', 'workflow_template', 'workflow_version', 'workflow_stage', 'workflow_transition', 'task_workflow_instance',
   'task_stage_execution', 'review_request', 'approval', 'change_request', 'comment', 'mention', 'reaction', 'attachment',
-  'file_version', 'notification', 'notification_preference', 'time_entry', 'timesheet', 'work_schedule', 'attendance_record',
+  'file_version', 'notification', 'notification_preference', 'notification_delivery', 'time_entry', 'timesheet', 'work_schedule', 'attendance_record',
   'leave_type', 'leave_request', 'holiday', 'capacity_plan', 'goal', 'kpi_definition', 'kpi_measurement', 'automation',
   'automation_run', 'ai_request', 'ai_action_proposal', 'audit_event', 'integration', 'webhook', 'saved_view',
   'custom_field_definition', 'custom_field_value',

@@ -11,7 +11,8 @@
 - Prompt 17 Templates and recurring work: **Complete / Gate PASS**. Published task/project templates, timezone/DST recurrence, deterministic occurrence runs, bounded catch-up, pause/resume, RTL UI.
 - Prompt 18 Comments and collaboration: **Complete**. Trusted internal/client projections, 15-minute author edit, immutable review evidence, mentions, reactions, watchers, bounded activity, RTL collaboration screen.
 - Prompt 19 Secure file management: **Complete**. Private signed upload/finalize, R2 SigV4 adapter, scan/quarantine workers, immutable versions, audited short downloads, 30-day retention/legal hold/two-phase purge, RTL library.
-- Prompt 20 Notification center: **In progress**. In-app inbox, preferences, email adapter, digests, retries/dead-letter, quiet hours, and event fan-out.
+- Prompt 20 Notification center: **Complete / Gate PASS**. Outbox projection, minimized payloads, deterministic dedupe, RTL inbox/preferences, safe email digests, quiet hours, retry/dead-letter, and provider contract.
+- Prompt 21 Workload and capacity: **In progress**. Capacity periods, assignment demand, conflict visibility, manager scopes, and privacy-safe planning.
 
 آخر تحديث: 2026-07-30
 
@@ -36,7 +37,8 @@
 | P17 Templates/recurrence | Complete / Gate PASS | 10 focused tests؛ DST، deterministic dedupe، pause/resume، bounded scheduler، RTL/axe؛ 286 suite + 5 emulator |
 | P18 Collaboration | Complete | 13 focused tests؛ internal/client separation، edit lock/window، tombstone، mentions/reactions/watchers، RTL/axe؛ 299 suite |
 | P19 Secure files | Complete | 19 focused tests؛ allowlist/100MB/checksum، signed grants، inspect/scan/quarantine، versions، retention/purge، R2 SigV4، RTL/axe؛ 318 suite |
-| P20-P28 | Pending | التنفيذ متسلسل بعد P19 |
+| P20 Notification center | Complete / Gate PASS | 14 focused tests؛ 333 suite + 5 emulator؛ minimized payload/dedupe/digest/retry/DLQ؛ RTL/axe |
+| P21-P28 | Pending | التنفيذ متسلسل بعد P20 |
 
 ## Baseline recovery
 
@@ -45,8 +47,8 @@
 ## أحدث فحوص
 
 - `npm.cmd ci --ignore-scripts`: Passed؛ lockfile قابل لإعادة الإنتاج.
-- `npm.cmd run check`: Passed في P19: typecheck + lint + 37 test files + build + bundle.
-- `npm.cmd test`: 318/318 passed، ولا يوجد skipped critical test.
+- `npm.cmd run check`: Passed في P20: typecheck + lint + 40 test files + build + bundle.
+- `npm.cmd test`: 333/333 passed، ولا يوجد skipped critical test.
 - `npm.cmd run test:emulator`: 5/5 Firestore rules tests passed على JRE محلي معزول.
 - `npm.cmd run build && npm.cmd run check:bundle`: Passed؛ entry = 12.43 KB، أكبر vendor chunk = 345.83 KB.
 - `npm.cmd audit --omit=dev`: لا Critical؛ 2 High و6 Moderate معروفة ومقيدة في المخاطر.

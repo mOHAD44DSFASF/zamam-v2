@@ -121,7 +121,7 @@
 
 | Permission | المعنى |
 |---|---|
-| `notification.view/manage_preferences/admin_retry` | inbox/preferences/retry |
+| `notification.view/manage_preferences/admin_retry/deliver/policy.manage` | inbox/preferences/admin retry؛ worker delivery؛ إدارة سياسة الأحداث |
 | `automation.view/create/manage/publish/execute/cancel` | automation lifecycle |
 | `ai.use` | إنشاء AI request |
 | `ai.view_history` | history ضمن scope |

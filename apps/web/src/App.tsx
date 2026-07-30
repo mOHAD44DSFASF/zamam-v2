@@ -15,6 +15,7 @@ const ReviewInboxPage = lazy(() => import('./features/reviews/ReviewInboxPage').
 const TemplateManagementPage = lazy(() => import('./features/templates/TemplateManagementPage').then((module) => ({ default: module.TemplateManagementPage })))
 const CollaborationPage = lazy(() => import('./features/collaboration/CollaborationPage').then((module) => ({ default: module.CollaborationPage })))
 const FileLibraryPage = lazy(() => import('./features/files/FileLibraryPage').then((module) => ({ default: module.FileLibraryPage })))
+const NotificationCenterPage = lazy(() => import('./features/notifications/NotificationCenterPage').then((module) => ({ default: module.NotificationCenterPage })))
 const EmployeeWorkspace = lazy(() => import('./pages/EmployeeWorkspace').then((module) => ({ default: module.EmployeeWorkspace })))
 const InvitationAcceptance = lazy(() => import('./pages/InvitationAcceptance').then((module) => ({ default: module.InvitationAcceptance })))
 const Login = lazy(() => import('./pages/Login').then((module) => ({ default: module.Login })))
@@ -52,6 +53,7 @@ function App() {
             <Route path="/templates" element={<TemplateManagementPage />} />
             <Route path="/tasks/:taskId/collaboration" element={<CollaborationPage />} />
             <Route path="/files" element={<FileLibraryPage />} />
+            <Route path="/notifications" element={<NotificationCenterPage />} />
           </Route>
           <Route path="/" element={<Navigate to="/workspace" replace />} />
           <Route path="*" element={<Navigate to="/workspace" replace />} />

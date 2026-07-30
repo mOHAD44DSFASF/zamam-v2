@@ -78,7 +78,8 @@ infra/firebase/
 | Approval Service | request/slots/decision/delegate/change request | Workflow, Notification؛ `review.*`,`task.approve` | decision+review+outbox atomic | first-effective/all policy races؛ Idem decision |
 | Comment Service | internal/client comments، mention/reaction | visibility/membership؛ comment perms | comment+mentions+outbox؛ `comment.mentioned` | sanitize/length؛ Idem create |
 | File Service | upload intent/finalize/version/share/delete/restore | storage adapter, scanner؛ file perms | metadata+outbox؛ `file.uploaded` | signed expiry/checksum؛ Idem finalize/delete |
-| Notification Service | inbox/preferences/routing/delivery | event bus/providers | notification record then channel jobs | retry provider، DLQ، dedupe by recipient/event |
+| Notification Service | inbox/preferences/routing؛ `NotificationProjectionService` يستهلك outbox | event bus/audience/preferences | notification + delivery atomic per recipient | deterministic dedupe by recipient/event؛ payload minimization؛ critical override |
+| Notification Delivery Worker | digest grouping/email delivery/retry/DLQ | recipient directory/provider | claim ثم provider ثم delivered/retry | batch 50؛ SHA-256 idempotency؛ لا work data في البريد |
 | Time Tracking Service | timer/entries/timesheets/adjust | Task/Employment؛ time perms | entry/timesheet+AE | overlap/version checks؛ Idem timer stop/submit |
 | Attendance Service | record/import/correct/reconcile | Schedule/Leave؛ attendance perms | daily logical record + event | dedupe device events؛ correction supersedes |
 | Leave Service | request/balance/approve/cancel | Employment/Schedule/Workflow | request+capacity impact+outbox | overlap/balance transaction؛ Idem |
@@ -238,4 +239,3 @@ Error:
 - Cloud Run min instances فقط لخدمات latency-critical بعد قياس.
 - file bytes direct-to-storage.
 - archive high-volume event/audit/metrics إلى warehouse حسب retention.
-
