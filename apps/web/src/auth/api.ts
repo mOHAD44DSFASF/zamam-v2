@@ -1,3 +1,4 @@
+import { appCheckHeaders } from '../lib/firebase'
 interface ApiErrorBody { code?: string }
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
@@ -6,7 +7,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   if (!apiBaseUrl) throw new Error('AUTH_API_NOT_CONFIGURED')
   const response = await fetch(`${apiBaseUrl}${path}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-correlation-id': crypto.randomUUID() },
+    headers: { 'content-type': 'application/json', 'x-correlation-id': crypto.randomUUID(), 'x-idempotency-key': crypto.randomUUID(), ...await appCheckHeaders() },
     body: JSON.stringify(body),
     credentials: 'omit',
   })

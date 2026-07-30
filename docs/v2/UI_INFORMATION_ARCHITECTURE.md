@@ -113,8 +113,10 @@ Dashboard، Projects، Requests، Approvals، Deliveries، Notifications، Profi
 
 | Route / Screen | الغرض والمستخدمون | البيانات/actions/filters | E/L/R، mobile، sensitive/audit |
 |---|---|---|---|
-| `/time` Time Tracking | members | running timer، entries، task/project؛ date/status | offline conflict explanation؛ timer stop Idem/AE |
-| `/timesheets` Timesheets | employees/managers | periods، submit/approve/reject؛ user/team/status | locked state clear؛ decisions AE |
+| `/time` Time Tracking + Timesheets (تنفيذ P22 الموحد) | members/managers by time permissions | running timer، manual entries، period submit، approval queue | billable capability منفصل؛ offline conflict؛ commands audited/idempotent |
+| `/attendance` Attendance + Leave | self؛ scoped HR/managers | today record، balances، leave request، ordered approval queue | no location collection؛ HR fields hidden by capability؛ corrections audited |
+| `/reports` Reports/KPI/Exports | scoped report permissions | versioned metric cards، lineage cutoff، allowed-field CSV job | performance/financial capability projection؛ no-data explicit؛ async export |
+| `/timesheets` Timesheets (alias مستقبلية) | employees/managers | periods، submit/approve/reject؛ user/team/status | approved lock clear؛ corrections create replacement؛ decisions AE |
 | `/attendance` Attendance | self/managers/HR | daily records/exceptions؛ date/team/status | privacy projection؛ correction reason/AE |
 | `/leave` Leave Requests | employees/managers/HR | balances، request، approve؛ type/status/date | overlap/balance errors؛ private reason protected؛ AE |
 | `/reports` Reports | scoped managers | catalog، filters، KPI definitions، async export | no-data vs unavailable؛ export job/expiry/AE |

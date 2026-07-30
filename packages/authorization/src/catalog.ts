@@ -9,6 +9,7 @@ export const PERMISSIONS = [
   'role.view', 'role.manage', 'role.assign', 'membership.view', 'membership.manage',
   'work_schedule.view', 'work_schedule.manage',
   'client.view', 'client.create', 'client.manage', 'client.archive', 'client.contact.manage', 'client.financial.view',
+  'portal.view', 'portal.request.create', 'portal.delivery.download',
   'project.view', 'project.create', 'project.manage', 'project.archive', 'project.reopen',
   'project.member.manage', 'project.financial.view', 'project.financial.manage',
   'workspace.view', 'workspace.create', 'workspace.manage', 'workspace.archive', 'workspace.member.manage',

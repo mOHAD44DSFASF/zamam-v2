@@ -1,4 +1,4 @@
-import { auth } from '../../lib/firebase'
+import { appCheckHeaders, auth } from '../../lib/firebase'
 
 export interface NotificationSummary {
   id: string
@@ -50,8 +50,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
       'content-type': 'application/json',
       'x-correlation-id': crypto.randomUUID(),
       'x-idempotency-key': crypto.randomUUID(),
-      ...(import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true'
-        ? { 'x-firebase-appcheck': 'emulator-app-check' } : {}),
+      ...await appCheckHeaders(),
     },
     body: JSON.stringify(body),
   })

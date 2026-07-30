@@ -17,7 +17,12 @@ const CollaborationPage = lazy(() => import('./features/collaboration/Collaborat
 const FileLibraryPage = lazy(() => import('./features/files/FileLibraryPage').then((module) => ({ default: module.FileLibraryPage })))
 const NotificationCenterPage = lazy(() => import('./features/notifications/NotificationCenterPage').then((module) => ({ default: module.NotificationCenterPage })))
 const WorkloadPage = lazy(() => import('./features/workload/WorkloadPage').then((module) => ({ default: module.WorkloadPage })))
-const EmployeeWorkspace = lazy(() => import('./pages/EmployeeWorkspace').then((module) => ({ default: module.EmployeeWorkspace })))
+const TimeTrackingPage = lazy(() => import('./features/time/TimeTrackingPage').then((module) => ({ default: module.TimeTrackingPage })))
+const AttendanceLeavePage = lazy(() => import('./features/attendance/AttendanceLeavePage').then((module) => ({ default: module.AttendanceLeavePage })))
+const ReportsPage = lazy(() => import('./features/reports/ReportsPage').then((module) => ({ default: module.ReportsPage })))
+const AIAssistantPage = lazy(() => import('./features/ai/AIAssistantPage').then((module) => ({ default: module.AIAssistantPage })))
+const ClientPortalPage = lazy(() => import('./features/portal/ClientPortalPage').then((module) => ({ default: module.ClientPortalPage })))
+const AutomationPage = lazy(() => import('./features/automations/AutomationPage').then((module) => ({ default: module.AutomationPage })))
 const InvitationAcceptance = lazy(() => import('./pages/InvitationAcceptance').then((module) => ({ default: module.InvitationAcceptance })))
 const Login = lazy(() => import('./pages/Login').then((module) => ({ default: module.Login })))
 const PasswordReset = lazy(() => import('./pages/PasswordReset').then((module) => ({ default: module.PasswordReset })))
@@ -41,7 +46,7 @@ function App() {
             <Route path="/invitations/accept" element={<InvitationAcceptance />} />
           </Route>
           <Route element={<ProtectedRoute />}>
-            <Route path="/workspace" element={<EmployeeWorkspace />} />
+            <Route path="/workspace" element={<Navigate to="/tasks" replace />} />
             <Route path="/admin" element={<AdministrationUnavailable />} />
             <Route path="/admin/organization" element={<OrganizationAdminPage />} />
             <Route path="/people" element={<EmployeeDirectoryPage />} />
@@ -56,6 +61,13 @@ function App() {
             <Route path="/files" element={<FileLibraryPage />} />
             <Route path="/notifications" element={<NotificationCenterPage />} />
             <Route path="/workload" element={<WorkloadPage />} />
+            <Route path="/time" element={<TimeTrackingPage />} />
+            <Route path="/attendance" element={<AttendanceLeavePage />} />
+            <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/ai" element={<AIAssistantPage />} />
+            <Route path="/portal/:organizationSlug" element={<ClientPortalPage />} />
+            <Route path="/portal/:organizationSlug/projects/:projectId" element={<ClientPortalPage />} />
+            <Route path="/automations" element={<AutomationPage />} />
           </Route>
           <Route path="/" element={<Navigate to="/workspace" replace />} />
           <Route path="*" element={<Navigate to="/workspace" replace />} />

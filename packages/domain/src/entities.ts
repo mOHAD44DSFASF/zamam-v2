@@ -22,6 +22,8 @@ export interface TeamMembership extends TenantEntity { teamId: string; userId: s
 
 export interface Client extends TenantEntity, ArchiveFields { name: string; code: string; industry?: string; status: ClientStatus; accountManagerUserId?: string }
 export interface ClientContact extends TenantEntity { clientId: string; name: string; emailHash: string; emailCiphertext: string; encryptionKeyVersion: string; portalStatus: 'none' | 'eligible' | 'invited' | 'active' | 'disabled'; clientAdmin: boolean; userId?: string }
+export interface ClientRequest extends TenantEntity { clientId: string; projectId: string; requestedBy: string; subject: string; description: string; status: 'open' | 'acknowledged' | 'resolved' | 'cancelled'; resolvedAt?: UtcIsoString }
+export interface ClientDelivery extends TenantEntity { clientId: string; projectId: string; fileId: string; fileVersionId: string; title: string; status: 'available' | 'withdrawn' | 'expired'; deliveredAt: UtcIsoString; expiresAt?: UtcIsoString }
 export interface Project extends TenantEntity, ArchiveFields { clientId: string; name: string; code: string; status: ProjectStatus; departmentId?: string; managerUserId: string; startsOn?: string; dueOn?: string; clientVisible: boolean }
 export interface ProjectMember extends TenantEntity { projectId: string; userId: string; contactId?: string; principalType: 'member' | 'client'; access: 'viewer' | 'contributor' | 'manager'; status: 'active' | 'ended' }
 export interface ProjectFinancials extends TenantEntity { projectId: string; currency: string; budgetMinor: number; billingModel: 'fixed' | 'hourly' | 'retainer' | 'non_billable'; status: 'draft' | 'approved' | 'locked' }
@@ -55,12 +57,55 @@ export interface FileVersion extends TenantEntity { fileId: string; versionNumbe
 export interface Notification extends TenantEntity { recipientUserId: string; eventType: string; dedupeKey: string; titleKey: string; previewKey?: string; status: NotificationStatus; deliveryState: 'suppressed' | 'in_app_only' | 'queued' | 'delivered' | 'failed'; inAppVisible: boolean; locale: 'ar' | 'en'; resourceType?: string; resourceId?: string; visibility: 'internal' | 'client'; readAt?: UtcIsoString; archivedAt?: UtcIsoString }
 export interface NotificationPreference extends TenantEntity { userId: string; eventType: string; inApp: boolean; email: boolean; digest: 'immediate' | 'daily' | 'weekly' | 'never'; timezone: string; quietHoursStart?: string; quietHoursEnd?: string }
 export interface NotificationDelivery extends TenantEntity { notificationId: string; recipientUserId: string; channel: 'email'; status: 'pending' | 'processing' | 'delivered' | 'failed' | 'dead_letter' | 'suppressed'; availableAt: UtcIsoString; attemptCount: number; providerMessageId?: string; deliveredAt?: UtcIsoString; lastErrorCode?: string }
-export interface TimeEntry extends TenantEntity { userId: string; taskId?: string; projectId: string; startedAt: UtcIsoString; endedAt?: UtcIsoString; minutes: number; status: TimeEntryStatus }
-export interface Timesheet extends TenantEntity { userId: string; periodStart: string; periodEnd: string; status: TimesheetStatus; submittedAt?: UtcIsoString; approvedAt?: UtcIsoString }
+export interface TimeEntry extends TenantEntity {
+  userId: string
+  taskId?: string
+  projectId: string
+  startedAt: UtcIsoString
+  endedAt?: UtcIsoString
+  minutes: number
+  billable: boolean
+  note?: string
+  status: TimeEntryStatus
+  timerState: 'running' | 'stopped'
+  localDate: string
+  timezone: string
+  timesheetId?: string
+  supersedesEntryId?: string
+}
+export interface Timesheet extends TenantEntity {
+  userId: string
+  periodStart: string
+  periodEnd: string
+  status: TimesheetStatus
+  totalMinutes: number
+  entryCount: number
+  submittedAt?: UtcIsoString
+  approvedAt?: UtcIsoString
+  approverUserId?: string
+  rejectionReason?: string
+}
+export interface TimeCorrection extends TenantEntity {
+  originalEntryId: string
+  requestedBy: string
+  reason: string
+  proposedStartedAt: UtcIsoString
+  proposedEndedAt: UtcIsoString
+  proposedMinutes: number
+  proposedNote?: string
+  status: 'pending' | 'approved' | 'rejected'
+  decidedBy?: string
+  decidedAt?: UtcIsoString
+  replacementEntryId?: string
+}
 export interface WorkSchedule extends TenantEntity { userId: string; timezone: string; weeklyMinutes: number; effectiveFrom: string; effectiveTo?: string }
 export interface AttendanceRecord extends TenantEntity { userId: string; date: string; status: AttendanceStatus; source: 'manual' | 'correction'; checkInAt?: UtcIsoString; checkOutAt?: UtcIsoString }
+export interface AttendanceCorrection extends TenantEntity { attendanceRecordId: string; reason: string; beforeStatus: AttendanceStatus; afterStatus: AttendanceStatus; correctedBy: string; correctedAt: UtcIsoString }
 export interface LeaveType extends TenantEntity, ArchiveFields { name: string; paid: boolean; annualAllowanceDays?: number }
 export interface LeaveRequest extends TenantEntity { userId: string; leaveTypeId: string; startsOn: string; endsOn: string; status: LeaveRequestStatus; approverUserId?: string; decidedAt?: UtcIsoString }
+export interface LeaveApproval extends TenantEntity { leaveRequestId: string; step: number; approverUserId: string; decision: 'approved' | 'rejected'; reason?: string; decidedAt: UtcIsoString }
+export interface LeaveBalance extends TenantEntity { userId: string; leaveTypeId: string; year: number; allowanceDays: number; usedDays: number; pendingDays: number; source: 'zamam' | 'external_hr' }
+export interface LeaveLedger extends TenantEntity { leaveRequestId: string; leaveBalanceId: string; quantityDays: number; operation: 'reserve' | 'release' | 'consume'; occurredAt: UtcIsoString }
 export interface Holiday extends TenantEntity { name: string; date: string; branchId?: string }
 export interface CapacityPlan extends TenantEntity {
   userId: string
@@ -82,11 +127,12 @@ export interface CapacityPlan extends TenantEntity {
   calculatedAt: UtcIsoString
 }
 export interface Goal extends TenantEntity { ownerUserId?: string; teamId?: string; title: string; status: 'draft' | 'active' | 'completed' | 'cancelled'; dueOn?: string }
-export interface KPIDefinition extends TenantEntity, ArchiveFields { key: string; name: string; unit: string; direction: 'higher_better' | 'lower_better' | 'neutral'; status: 'active' | 'archived' }
-export interface KPIMeasurement extends TenantEntity { kpiDefinitionId: string; subjectType: 'organization' | 'department' | 'team' | 'user' | 'project'; subjectId: string; periodStart: string; periodEnd: string; value: number; delayAttribution?: 'assignee' | 'reviewer' | 'client' | 'dependency' | 'system' | 'unattributed' }
+export interface KPIDefinition extends TenantEntity, ArchiveFields { key: string; name: string; definitionVersion: number; unit: string; direction: 'higher_better' | 'lower_better' | 'neutral'; status: 'draft' | 'published' | 'archived'; formulaKey: string; visibility: 'operational' | 'performance_sensitive'; publishedAt?: UtcIsoString }
+export interface KPIMeasurement extends TenantEntity { kpiDefinitionId: string; definitionVersion: number; subjectType: 'organization' | 'department' | 'team' | 'user' | 'project'; subjectId: string; periodStart: string; periodEnd: string; cutoffAt: UtcIsoString; value?: number; status: 'complete' | 'no_data'; sourceHash: string; sourceRunId: string; calculatedAt: UtcIsoString }
+export interface ExportJob extends TenantEntity { requestedBy: string; reportType: string; scopeType: string; scopeId: string; format: 'csv'; fields: readonly string[]; status: 'queued' | 'processing' | 'completed' | 'failed' | 'expired'; expiresAt: UtcIsoString; fileId?: string; rowCount?: number; errorCode?: string }
 
-export interface Automation extends TenantEntity, ArchiveFields { name: string; status: AutomationStatus; triggerType: string; actionTypes: readonly string[]; servicePrincipalId: string; riskLevel: 'low' | 'medium' | 'high' }
-export interface AutomationRun extends TenantEntity { automationId: string; triggerEventId: string; status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'; attemptCount: number; startedAt?: UtcIsoString; completedAt?: UtcIsoString }
+export interface Automation extends TenantEntity, ArchiveFields { name: string; status: AutomationStatus; definitionVersion: number; triggerType: string; conditions: readonly Readonly<Record<string, unknown>>[]; actions: readonly Readonly<Record<string, unknown>>[]; servicePrincipalId: string; scopeType: string; scopeId: string; riskLevel: 'low' }
+export interface AutomationRun extends TenantEntity { automationId: string; automationVersion: number; triggerEventId: string; status: 'queued' | 'running' | 'completed' | 'failed' | 'retrying' | 'cancelled' | 'dead_letter'; attemptCount: number; actionResults: readonly Readonly<Record<string, unknown>>[]; startedAt?: UtcIsoString; completedAt?: UtcIsoString; errorCode?: string }
 export interface AIRequest extends TenantEntity { requestedBy: string; purpose: string; modelPolicyId: string; status: 'queued' | 'processing' | 'completed' | 'failed'; promptHash: string }
 export interface AIActionProposal extends TenantEntity { aiRequestId: string; actionType: string; argumentsHash: string; riskLevel: 'low' | 'medium' | 'high'; status: AIActionStatus; approvedBy?: string; executedAt?: UtcIsoString }
 export interface AuditEvent extends TenantEntity { sequence: number; eventType: string; actorUserId: string | null; correlationId: string; resourceType: string; resourceId: string; outcome: 'allowed' | 'denied' | 'succeeded' | 'failed'; occurredAt: UtcIsoString; beforeHash?: string; afterHash?: string }
@@ -101,12 +147,12 @@ export interface RecurrenceRun extends TenantEntity { scheduleId: string; templa
 
 export const ENTITY_DESCRIPTORS = [
   'organization', 'organization_settings', 'department', 'team', 'user_profile', 'organization_membership', 'invitation', 'employment_profile',
-  'role', 'permission_definition', 'role_assignment', 'team_membership', 'client', 'client_contact', 'project',
+  'role', 'permission_definition', 'role_assignment', 'team_membership', 'client', 'client_contact', 'client_request', 'client_delivery', 'project',
   'project_member', 'project_financials', 'workspace', 'workspace_member', 'task', 'subtask', 'checklist', 'checklist_item', 'task_assignment', 'task_watcher',
   'tag', 'workflow_template', 'workflow_version', 'workflow_stage', 'workflow_transition', 'task_workflow_instance',
   'task_stage_execution', 'review_request', 'approval', 'change_request', 'comment', 'mention', 'reaction', 'attachment',
-  'file_version', 'notification', 'notification_preference', 'notification_delivery', 'time_entry', 'timesheet', 'work_schedule', 'attendance_record',
-  'leave_type', 'leave_request', 'holiday', 'capacity_plan', 'goal', 'kpi_definition', 'kpi_measurement', 'automation',
+  'file_version', 'notification', 'notification_preference', 'notification_delivery', 'time_entry', 'timesheet', 'time_correction', 'work_schedule', 'attendance_record', 'attendance_correction',
+  'leave_type', 'leave_request', 'leave_approval', 'leave_balance', 'leave_ledger', 'holiday', 'capacity_plan', 'goal', 'kpi_definition', 'kpi_measurement', 'export_job', 'automation',
   'automation_run', 'ai_request', 'ai_action_proposal', 'audit_event', 'integration', 'webhook', 'saved_view',
   'custom_field_definition', 'custom_field_value',
   'work_template', 'recurrence_schedule', 'recurrence_run',

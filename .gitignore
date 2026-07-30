@@ -22,6 +22,8 @@ dist-ssr
 .firebase/
 .npm-cache/
 *.zip
+.artifacts/
+services/functions/deploy-dist/
 
 # Editor directories and files
 .vscode/*

@@ -30,6 +30,9 @@ export type ApiErrorCode =
   | 'INVALID_REQUEST'
   | 'NOT_FOUND'
   | 'RATE_LIMITED'
+  | 'CONFLICT'
+  | 'FEATURE_DISABLED'
+  | 'SERVICE_UNAVAILABLE'
   | 'INTERNAL_ERROR'
 
 export interface SystemProbeCommand {

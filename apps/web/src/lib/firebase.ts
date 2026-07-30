@@ -1,6 +1,7 @@
 import { getApp, getApps, initializeApp, type FirebaseOptions } from 'firebase/app'
 import { connectAuthEmulator, getAuth } from 'firebase/auth'
 import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore'
+import { getToken, initializeAppCheck, ReCaptchaEnterpriseProvider, type AppCheck } from 'firebase/app-check'
 
 const configuredOptions: FirebaseOptions = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -24,9 +25,22 @@ const localOnlyOptions: FirebaseOptions = {
 
 const firebaseConfig = isFirebaseConfigured ? configuredOptions : localOnlyOptions
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig)
+let appCheck: AppCheck | null = null
+const appCheckSiteKey = import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY
+if (isFirebaseConfigured && appCheckSiteKey && import.meta.env.VITE_USE_FIREBASE_EMULATORS !== 'true') {
+  appCheck = initializeAppCheck(app, {
+    provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey),
+    isTokenAutoRefreshEnabled: true,
+  })
+}
 
 export const auth = getAuth(app)
 export const db = getFirestore(app)
+export async function appCheckHeaders(): Promise<Record<string,string>> {
+  if (import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true') return { 'x-firebase-appcheck': 'emulator-app-check' }
+  if (!appCheck) throw new Error('APP_CHECK_NOT_CONFIGURED')
+  return { 'x-firebase-appcheck': (await getToken(appCheck)).token }
+}
 
 if (import.meta.env.DEV && import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true') {
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })

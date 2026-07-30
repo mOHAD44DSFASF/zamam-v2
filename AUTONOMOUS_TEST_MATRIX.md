@@ -1,6 +1,35 @@
 # Autonomous Test Matrix
 
-Latest additions: P21 workload/capacity domain and projection 7 passed; RTL workload 3. Full suite 343/343; latest emulator gate 5/5.
+Latest additions: P28 route coverage, App Check clients, persistent API controls, headers/indexes/CI, backup corruption, Functions artifact, and enforced predeploy STOP. Full suite 56 files, 407/407; emulator 5/5. Gate P28 remains STOP because launch assurance and runtime composition are incomplete.
+
+| P28 Gate | clean install/type/lint/unit/integration/UI/build/bundle/artifact/emulator | 407 tests + 5 emulator PASS; Gate STOP |
+| P28 | production-readiness invariants | V1 route unreachable, all feature clients App Check, rules/indexes/headers/CI/backup/artifact | 5 pass |
+| P28 | API route coverage | 65 web paths registered, public-auth App Check, fail-closed uncomposed backend | 3 pass |
+| P28 | browser/device smoke | managed approval quota prevented final launch | BLOCKED |
+| P28 | production-like load/DR/penetration/legal/authority | external staging and accountable approvals required | NOT RUN |
+
+Latest additions: P25 automation 6؛ P26 AI 7؛ P27 portal 7. Full suite 397/397؛ emulator 5/5؛ Gate P27 PASS.
+
+| P27 Gate | client experience | cross-org/client denial، strict projection، portal request audit، RTL/axe، full check/build/bundle، 397 tests، 5 emulator | PASS |
+| P27 | portal backend/security | identity/status/client account، explicit project membership، no internal payload، request audit | 5 pass |
+| P27 | portal RTL/accessibility | dashboard/project/signed-download command، Arabic + English content smoke، axe | 2 pass |
+| P26 | AI safety/backend | redaction، injection، SHA-256 evidence، disabled provider، quota/time bounds، proposal-only | 5 pass |
+| P26 | AI RTL/accessibility | disabled state، human decision، no execute action، axe | 2 pass |
+| P25 | automation RTL/accessibility | bounded policy، pause/resume capability، traceable run/error، axe | 1 pass |
+
+| P25 | automation engine | allowlist/loop denial، dedupe، least-privilege action permission، depth/quota، retry/DLQ، condition skip | 5 pass |
+
+| P24 Gate | full management data | security matrix، reconciliation، formula lineage، export bounds، typecheck/lint/build/bundle، 375 tests، 5 emulator | PASS |
+
+| P24 | metric/service/security | fixed formulas، no-data، attribution، deterministic lineage، performance scope، export whitelist/step-up | 4 pass |
+| P24 | export worker | row/field bounds، CSV injection، minimized async handoff | 2 pass |
+| P24 | RTL UI/accessibility | sensitive metric hiding، lineage، server-advertised export fields، axe | 2 pass |
+
+| P23 | domain/service/security | holiday priority، manual attendance، correction evidence، leave overlap، ordered approval، balance ledger، external HR fail-closed | 6 pass |
+| P23 | RTL UI/accessibility | self attendance/leave، explicit request، no team leakage، axe | 2 pass |
+
+| P22 | domain/service/security | rounding، timezone، half-open overlap، idempotent timer، future denial، atomic submit/approve، self approval، immutable correction | 7 pass |
+| P22 | RTL UI/accessibility | self entries، start command، explicit period submit، billable redaction، axe | 3 pass |
 
 | P21 | domain/service/privacy | part-time، leave/holiday deduction، overlap، unknown schedule/estimate، overload، scoped audited projection، bounded query | 7 pass |
 | P21 | RTL UI/accessibility | explainable capacity، unknown warning، rebuild boundary، name redaction، axe | 3 pass |

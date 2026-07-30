@@ -25,6 +25,8 @@
     "test:emulator": "firebase emulators:exec --project zamam-emulator --only firestore \"npm.cmd run test:rules\"",
     "check:bundle": "node tools/check-bundle.mjs",
     "check": "npm run typecheck && npm run lint && npm test && npm run build && npm run check:bundle",
+    "check:launch-readiness": "node tools/assert-launch-ready.mjs",
+    "package:functions": "npm run build:deploy --workspace @zamam/functions && node tools/package-functions.mjs",
     "preview": "npm run preview --workspace @zamam/web"
   },
   "devDependencies": {

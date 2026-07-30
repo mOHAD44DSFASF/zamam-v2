@@ -1,4 +1,4 @@
-import { auth } from '../../lib/firebase'
+import { appCheckHeaders, auth } from '../../lib/firebase'
 
 export interface ReviewInboxItem {
   approvalId: string
@@ -36,7 +36,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
     headers: {
       authorization: `Bearer ${await user.getIdToken()}`, 'content-type': 'application/json',
       'x-correlation-id': crypto.randomUUID(), 'x-idempotency-key': crypto.randomUUID(),
-      ...(import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true' ? { 'x-firebase-appcheck': 'emulator-app-check' } : {}),
+      ...await appCheckHeaders(),
     },
     body: JSON.stringify(body),
   })
@@ -48,4 +48,3 @@ export const reviewInboxClient: ReviewInboxClient = {
   load: (organizationId) => post('/v1/reviews/inbox', { organizationId, limit: 50 }),
   decide: (organizationId, input) => post('/v1/reviews/decide', { organizationId, ...input }),
 }
-

@@ -13,6 +13,17 @@ const idempotencyPattern = /^[A-Za-z0-9_-]{8,128}$/
 class ApiError extends Error {
   constructor(readonly status: number, readonly code: ApiErrorCode, message: string) { super(message) }
 }
+function domainError(error:unknown){
+  if(error instanceof ApiError)return error
+  const code=error instanceof Error?error.message:''
+  if(code==='FEATURE_BACKEND_NOT_COMPOSED'||code.endsWith('_NOT_CONFIGURED'))return new ApiError(503,'SERVICE_UNAVAILABLE','The service is not configured')
+  if(code.endsWith('_DISABLED'))return new ApiError(503,'FEATURE_DISABLED','The feature is disabled')
+  if(code.includes('AUTHORIZATION')||code.endsWith('_DENIED'))return new ApiError(403,'AUTHORIZATION_DENIED','Access is denied')
+  if(code.includes('NOT_FOUND'))return new ApiError(404,'NOT_FOUND','Resource not found')
+  if(code.includes('CONFLICT')||code.includes('STALE')||code.includes('IMMUTABLE')||code.includes('ALREADY_EXISTS'))return new ApiError(409,'CONFLICT','Resource state changed')
+  if(code.startsWith('INVALID_')||code.endsWith('_REQUIRED')||code.includes('VALIDATION'))return new ApiError(400,'INVALID_REQUEST','Request validation failed')
+  return new ApiError(500,'INTERNAL_ERROR','The request could not be completed')
+}
 
 export interface ApiDependencies {
   tokenVerifier: TokenVerifier
@@ -36,6 +47,7 @@ export interface TrustedApiRoute {
   operation: string
   schema: z.ZodType
   rateLimit?: number
+  authentication?: 'required' | 'public'
   handle(context: TrustedApiRouteContext, input: unknown): Promise<unknown>
 }
 
@@ -101,8 +113,12 @@ export function createApi(dependencies: ApiDependencies) {
         throw new ApiError(401, 'APP_CHECK_REQUIRED', 'App Check is required')
       }
       let principal: AuthenticatedPrincipal
-      try { principal = await dependencies.tokenVerifier.verify(bearer(request)) } catch {
-        throw new ApiError(401, 'AUTHENTICATION_REQUIRED', 'Authentication is required')
+      if (!isProbe && route!.authentication === 'public') {
+        principal = { userId: 'public-auth', tokenIssuedAt: 0, emailVerified: false }
+      } else {
+        try { principal = await dependencies.tokenVerifier.verify(bearer(request)) } catch {
+          throw new ApiError(401, 'AUTHENTICATION_REQUIRED', 'Authentication is required')
+        }
       }
 
       const operation = isProbe ? 'system.probe' : route!.operation
@@ -142,7 +158,7 @@ export function createApi(dependencies: ApiDependencies) {
     } catch (error) {
       const apiError = error instanceof IdempotencyConflictError
         ? new ApiError(409, 'IDEMPOTENCY_CONFLICT', 'Idempotency key conflicts with another request')
-        : error instanceof ApiError ? error : new ApiError(500, 'INTERNAL_ERROR', 'The request could not be completed')
+        : domainError(error)
       dependencies.logger.warn('api.request.rejected', correlation, { code: apiError.code, error })
       return json(apiError.status, {
         error: { code: apiError.code, message: apiError.message },

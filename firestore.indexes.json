@@ -1,0 +1,19 @@
+{
+  "indexes": [
+    {"collectionGroup":"task","queryScope":"COLLECTION","fields":[{"fieldPath":"status","order":"ASCENDING"},{"fieldPath":"assigneeUserId","order":"ASCENDING"},{"fieldPath":"dueAt","order":"ASCENDING"}]},
+    {"collectionGroup":"task","queryScope":"COLLECTION","fields":[{"fieldPath":"projectId","order":"ASCENDING"},{"fieldPath":"status","order":"ASCENDING"},{"fieldPath":"updatedAt","order":"DESCENDING"}]},
+    {"collectionGroup":"task","queryScope":"COLLECTION","fields":[{"fieldPath":"clientVisible","order":"ASCENDING"},{"fieldPath":"projectId","order":"ASCENDING"},{"fieldPath":"updatedAt","order":"DESCENDING"}]},
+    {"collectionGroup":"approval","queryScope":"COLLECTION","fields":[{"fieldPath":"reviewerUserId","order":"ASCENDING"},{"fieldPath":"status","order":"ASCENDING"},{"fieldPath":"createdAt","order":"ASCENDING"}]},
+    {"collectionGroup":"notification","queryScope":"COLLECTION","fields":[{"fieldPath":"recipientUserId","order":"ASCENDING"},{"fieldPath":"status","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}]},
+    {"collectionGroup":"time_entry","queryScope":"COLLECTION","fields":[{"fieldPath":"userId","order":"ASCENDING"},{"fieldPath":"localDate","order":"ASCENDING"},{"fieldPath":"startedAt","order":"DESCENDING"}]},
+    {"collectionGroup":"timesheet","queryScope":"COLLECTION","fields":[{"fieldPath":"status","order":"ASCENDING"},{"fieldPath":"periodStart","order":"DESCENDING"}]},
+    {"collectionGroup":"attendance_record","queryScope":"COLLECTION","fields":[{"fieldPath":"userId","order":"ASCENDING"},{"fieldPath":"date","order":"DESCENDING"}]},
+    {"collectionGroup":"leave_request","queryScope":"COLLECTION","fields":[{"fieldPath":"status","order":"ASCENDING"},{"fieldPath":"startsOn","order":"ASCENDING"}]},
+    {"collectionGroup":"capacity_plan","queryScope":"COLLECTION","fields":[{"fieldPath":"scopeType","order":"ASCENDING"},{"fieldPath":"scopeId","order":"ASCENDING"},{"fieldPath":"periodStart","order":"DESCENDING"}]},
+    {"collectionGroup":"attachment","queryScope":"COLLECTION","fields":[{"fieldPath":"status","order":"ASCENDING"},{"fieldPath":"retentionState","order":"ASCENDING"},{"fieldPath":"visibility","order":"ASCENDING"},{"fieldPath":"updatedAt","order":"DESCENDING"}]},
+    {"collectionGroup":"automation_run","queryScope":"COLLECTION","fields":[{"fieldPath":"automationId","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}]},
+    {"collectionGroup":"audit_event","queryScope":"COLLECTION","fields":[{"fieldPath":"resourceType","order":"ASCENDING"},{"fieldPath":"occurredAt","order":"DESCENDING"}]},
+    {"collectionGroup":"project_member","queryScope":"COLLECTION","fields":[{"fieldPath":"userId","order":"ASCENDING"},{"fieldPath":"principalType","order":"ASCENDING"},{"fieldPath":"status","order":"ASCENDING"}]}
+  ],
+  "fieldOverrides": []
+}

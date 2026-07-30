@@ -1,10 +1,12 @@
 import { getApps, initializeApp } from 'firebase-admin/app'
 import { getAppCheck } from 'firebase-admin/app-check'
 import { getAuth } from 'firebase-admin/auth'
+import { getFirestore } from 'firebase-admin/firestore'
 import { onRequest } from 'firebase-functions/v2/https'
 import { createLogger } from '@zamam/observability'
 import { createApi } from './api.js'
-import { InMemoryIdempotencyStore, InMemoryOutbox, InMemoryRateLimiter } from '../platform/in-memory.js'
+import { createFeatureRoutes, DisabledFeatureCommandDispatcher } from './feature-routes.js'
+import { FirestoreIdempotencyStore, FirestoreOutboxPublisher, FirestoreRateLimiter } from '../platform/firestore-runtime.js'
 
 if (getApps().length === 0) initializeApp()
 
@@ -12,12 +14,14 @@ const allowedOrigins = new Set(
   (process.env.ZAMAM_ALLOWED_ORIGINS ?? '').split(',').map((origin) => origin.trim()).filter(Boolean),
 )
 
+const firestore = getFirestore()
 const apiHandler = createApi({
   allowedOrigins,
+  routes: createFeatureRoutes(new DisabledFeatureCommandDispatcher()),
   logger: createLogger({ write: (record) => console.log(JSON.stringify(record)) }),
-  idempotencyStore: new InMemoryIdempotencyStore(),
-  outbox: new InMemoryOutbox(),
-  rateLimiter: new InMemoryRateLimiter(),
+  idempotencyStore: new FirestoreIdempotencyStore(firestore),
+  outbox: new FirestoreOutboxPublisher(firestore),
+  rateLimiter: new FirestoreRateLimiter(firestore),
   tokenVerifier: {
     async verify(token) {
       const decoded = await getAuth().verifyIdToken(token, true)

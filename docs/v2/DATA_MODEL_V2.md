@@ -134,8 +134,9 @@ Global collections محدودة:
 
 | Path/entity | fields | indexes/queries | lifecycle/risk |
 |---|---|---|---|
-| `timeEntries/{id}` | `userId*,taskId?,projectId?,startedAt*,endedAt?,durationMinutes?,status*,billable*,note?` | user+status+startedAt; project+startedAt; task+startedAt | CMD; approved lock؛ HR/financial high volume |
-| `timesheets/{id}` | `userId*,periodStart*,periodEnd*,status*,totalMinutes*,submittedAt?,approvedAt?,approverId?` | user+period; team denorm+status+period | CMD/JOB totals; retain policy; AE |
+| `time_entry/{id}` | `userId*,taskId?,projectId*,startedAt*,endedAt?,minutes*,billable*,note?,status*,timerState*,timezone*,localDate*,timesheetId?,supersedesEntryId?` | user+localDate+startedAt؛ running by user؛ project/task reports | audited CMD؛ approved immutable؛ HR/financial high volume |
+| `timesheet/{timesheet-YYYYMMDD-userId}` | `userId*,periodStart*,periodEnd*,status*,totalMinutes*,entryCount*,submittedAt?,approvedAt?,approverUserId?,rejectionReason?` | user+period unique؛ status+period for approval queue | audited CMD totals؛ approved period locked؛ retain policy |
+| `time_correction/{id}` | `originalEntryId*,requestedBy*,reason*,proposedStartedAt*,proposedEndedAt*,proposedMinutes*,proposedNote?,status*,decidedBy?,decidedAt?,replacementEntryId?` | originalEntryId+status؛ status+createdAt | append-only proposal/decision evidence؛ approved creates replacement |
 | `attendanceRecords/{id}` | `userId*,workDate*,status*,checkInAt?,checkOutAt?,workedMinutes?,source*,exceptions:a<m>` | user+workDate; department/team denorm+date+status | CMD/JOB; one logical record/user/date; HR |
 | `leaveTypes/{id}` | `name*,code*,status*,paid*,unit*,approvalPolicy:m,balancePolicy:m` | status+name | CMD; version/archive; AE |
 | `leaveRequests/{id}` | `userId*,leaveTypeId*,startAt*,endAt*,quantity*,status*,reasonCipher?,approverIds:a<r>,decidedAt?` | user+status+start; approverIds+status+start; team denorm+status | CMD/WFE; HR retention; AE |
@@ -202,7 +203,7 @@ Global collections محدودة:
 | Notification delivery | notification_delivery | `organizationId + status + availableAt(asc)` |
 | Attendance | attendanceRecords | `organizationId + teamId/departmentId + workDate(desc) + status` |
 | Leave | leaveRequests | `organizationId + approverIds(array) + status + startAt` |
-| Time reports | timeEntries | `organizationId + projectId/userId + status + startedAt` |
+| Time reports | time_entry | `organizationId + userId + localDate(desc) + startedAt(desc)`؛ project/status indexes للتقارير |
 | Audit | auditEvents | `organizationId + action/resource/actor + occurredAt(desc)` indexes منفصلة |
 | Automation runs | automationRuns | `organizationId + automationId/status + startedAt(desc)` |
 
