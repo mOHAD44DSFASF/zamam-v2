@@ -1,0 +1,65 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-zamam-primary: #1B5E5A;
+  --color-zamam-primaryHover: #164D49;
+  --color-zamam-teal: #3A9E8F;
+  --color-zamam-tealLight: #5CBFAE;
+  --color-zamam-navy: #1A2744;
+  --color-zamam-dark: #0F2027;
+  --color-zamam-light: #F0F5F4;
+  --color-zamam-white: #FFFFFF;
+  --color-zamam-gray: #E0E8E6;
+  --color-zamam-textDark: #0A1628;
+  --color-zamam-textGray: #5A6B7A;
+
+  /* Keep meta aliases for backward compat */
+  --color-meta-blue: #1B5E5A;
+  --color-meta-blueHover: #164D49;
+  --color-meta-dark: #1A2744;
+  --color-meta-light: #F0F5F4;
+  --color-meta-white: #FFFFFF;
+  --color-meta-gray: #E0E8E6;
+  --color-meta-textDark: #0A1628;
+  --color-meta-textGray: #5A6B7A;
+
+  --font-sans: 'Cairo', 'Inter', sans-serif;
+
+  --shadow-meta: 0 2px 4px rgba(0, 0, 0, 0.1), 0 8px 16px rgba(0, 0, 0, 0.1);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
+  --shadow-glass-hover: 0 8px 32px 0 rgba(27, 94, 90, 0.2);
+}
+
+@layer base {
+  html {
+    direction: rtl;
+  }
+  body {
+    @apply bg-zamam-light text-zamam-textDark font-sans antialiased;
+  }
+  /* Hide native browser password reveal and clear buttons */
+  input::-ms-reveal,
+  input::-ms-clear {
+    display: none;
+  }
+}
+
+@layer utilities {
+  .glass-panel {
+    @apply bg-white/70 backdrop-blur-md border border-white/40 shadow-glass rounded-2xl;
+  }
+  
+  .glass-card {
+    @apply bg-white/80 backdrop-blur-sm border border-zamam-gray/50 shadow-card rounded-xl hover:shadow-glass-hover transition-all duration-300;
+  }
+
+  .btn-primary {
+    @apply bg-zamam-primary text-white px-6 py-2 rounded-full font-medium shadow-md hover:bg-zamam-primaryHover hover:shadow-lg transition-all active:scale-95;
+  }
+
+  .btn-secondary {
+    @apply bg-zamam-gray text-zamam-textDark px-6 py-2 rounded-full font-medium hover:bg-gray-300 transition-all active:scale-95;
+  }
+}
