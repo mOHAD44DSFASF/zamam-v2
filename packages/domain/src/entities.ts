@@ -28,11 +28,11 @@ export interface ProjectFinancials extends TenantEntity { projectId: string; cur
 export interface Workspace extends TenantEntity, ArchiveFields { projectId?: string; departmentId?: string; ownerTeamId?: string; name: string; status: WorkspaceStatus; visibility: 'private' | 'team' | 'project'; createdBy: string }
 export interface WorkspaceMember extends TenantEntity { workspaceId: string; userId: string; membershipRole: 'manager' | 'supervisor' | 'member' | 'viewer'; source: 'explicit' | 'project'; status: 'active' | 'ended'; joinedAt: UtcIsoString; endedAt?: UtcIsoString }
 
-export interface Task extends TenantEntity, ArchiveFields { projectId: string; workspaceId?: string; parentTaskId?: string; title: string; description: string; status: TaskStatus; priority: 'low' | 'medium' | 'high' | 'urgent'; assigneeUserId?: string; workflowInstanceId?: string; dueAt?: UtcIsoString; completedAt?: UtcIsoString; clientVisible: boolean }
+export interface Task extends TenantEntity, ArchiveFields { projectId: string; workspaceId?: string; parentTaskId?: string; title: string; description: string; status: TaskStatus; priority: 'low' | 'medium' | 'high' | 'urgent'; createdBy: string; assigneeUserId?: string; workflowInstanceId?: string; dueAt?: UtcIsoString; completedAt?: UtcIsoString; clientVisible: boolean }
 export interface Subtask extends TenantEntity { taskId: string; title: string; status: TaskStatus; assigneeUserId?: string; completedAt?: UtcIsoString }
 export interface Checklist extends TenantEntity { taskId: string; title: string; required: boolean }
 export interface ChecklistItem extends TenantEntity { checklistId: string; taskId: string; text: string; required: boolean; completed: boolean; completedBy?: string; completedAt?: UtcIsoString }
-export interface TaskAssignment extends TenantEntity { taskId: string; userId?: string; teamId?: string; assignmentRole: 'responsible' | 'contributor'; status: 'pending' | 'accepted' | 'declined' | 'ended'; acceptedAt?: UtcIsoString }
+export interface TaskAssignment extends TenantEntity { taskId: string; userId?: string; teamId?: string; assignmentRole: 'responsible' | 'contributor'; status: 'pending' | 'accepted' | 'declined' | 'ended'; assignedBy: string; acceptedAt?: UtcIsoString; declinedAt?: UtcIsoString; endedAt?: UtcIsoString }
 export interface TaskWatcher extends TenantEntity { taskId: string; userId: string }
 export interface Tag extends TenantEntity, ArchiveFields { name: string; color: string }
 

@@ -3,7 +3,8 @@
 ## Current checkpoint
 
 - Prompt 11 Workspace redesign: **Complete / Gate PASS**. Explicit membership entities, validated tenant context, trusted API route registry, deterministic V1 inventory/quarantine, 13 focused tests and 5 emulator rules tests.
-- Prompt 12 Task management core: **In progress**. Typed task/subtask/checklist/assignment commands, state/concurrency guards, and trusted API/UI flows.
+- Prompt 12 Task management core: **Complete**. Typed task aggregate, guarded lifecycle/concurrency, assignments, subtasks/checklists, audited commands, and RTL create/edit/details.
+- Prompt 13 Task views and saved filters: **In progress**. Bounded read model, URL filters, list/board/calendar/timeline, saved views and search boundary.
 
 آخر تحديث: 2026-07-30
 
