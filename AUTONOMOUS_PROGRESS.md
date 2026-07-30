@@ -11,8 +11,9 @@
 | P5 Permission and authorization | Complete | 162-permission catalog، scoped engine، default/custom roles، anti-escalation، recursive client-write deny |
 | P6 V2 schema/converters/audit | Complete | Gate P6 PASS؛ 60 tenant entity kinds، 160 tests، 4 emulator rules tests، clean install، backup/restore/rollback |
 | P7 Organization/departments/teams | Complete | backend-only audited lifecycle، atomic hierarchy counters، multi-team allocation، RTL admin UI، 11 focused tests |
-| P8 Employee management | In progress | invite/profile/employment/disable/departure/schedules |
-| P9-P28 | Pending | تُنفذ بالتسلسل بعد P8 |
+| P8 Employee management | Complete | compensated invite saga، no client roles، last-Owner/session/multi-tenant identity safety، departure cleanup، schedules، RTL directory |
+| P9 Client management | In progress | clients، contacts، portal eligibility، scoped privacy |
+| P10-P28 | Pending | تُنفذ بالتسلسل بعد P9 |
 
 ## Baseline recovery
 

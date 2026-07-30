@@ -24,5 +24,7 @@
 | P6 | performance budget | bounded query limit + web JS/image artifact budgets | pass؛ entry 8.2 KB، max JS 345.8 KB |
 | P7 | domain/service | organization settings/suspend، department/team uniqueness/archive، membership allocation/idempotency | 8 pass |
 | P7 | RTL UI/accessibility | hierarchy، capability feedback، empty state، create command flow، axe | 3 pass |
+| P8 | employee lifecycle | invitation/compensation، last Owner، session revoke، multi-tenant identity، departure cleanup، schedules/PII | 9 pass |
+| P8 | RTL UI/accessibility | sanitized directory، invite without role، sensitive disable confirmation، axe | 3 pass |
 
 يُوسّع الجدول عند بدء كل Prompt، ولا يُعتبر Prompt مكتملاً دون evidence قابل للتكرار.

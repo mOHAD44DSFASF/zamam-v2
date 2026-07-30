@@ -5,6 +5,7 @@ import { PublicOnlyRoute } from './auth/PublicOnlyRoute'
 
 const AdministrationUnavailable = lazy(() => import('./pages/AdministrationUnavailable').then((module) => ({ default: module.AdministrationUnavailable })))
 const OrganizationAdminPage = lazy(() => import('./features/organization/OrganizationAdminPage').then((module) => ({ default: module.OrganizationAdminPage })))
+const EmployeeDirectoryPage = lazy(() => import('./features/employees/EmployeeDirectoryPage').then((module) => ({ default: module.EmployeeDirectoryPage })))
 const EmployeeWorkspace = lazy(() => import('./pages/EmployeeWorkspace').then((module) => ({ default: module.EmployeeWorkspace })))
 const InvitationAcceptance = lazy(() => import('./pages/InvitationAcceptance').then((module) => ({ default: module.InvitationAcceptance })))
 const Login = lazy(() => import('./pages/Login').then((module) => ({ default: module.Login })))
@@ -32,6 +33,7 @@ function App() {
             <Route path="/workspace" element={<EmployeeWorkspace />} />
             <Route path="/admin" element={<AdministrationUnavailable />} />
             <Route path="/admin/organization" element={<OrganizationAdminPage />} />
+            <Route path="/people" element={<EmployeeDirectoryPage />} />
           </Route>
           <Route path="/" element={<Navigate to="/workspace" replace />} />
           <Route path="*" element={<Navigate to="/workspace" replace />} />

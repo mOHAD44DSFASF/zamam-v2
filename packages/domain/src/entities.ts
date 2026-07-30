@@ -12,7 +12,9 @@ export interface Team extends TenantEntity, ArchiveFields { name: string; code: 
 
 export interface UserIdentity extends GlobalEntity { email: string; accountStatus: UserAccountStatus; tokensValidAfter: UtcIsoString }
 export interface UserProfile extends TenantEntity { userId: string; displayName: string; firstName: string; locale: 'ar' | 'en'; timezone: string; avatarFileId?: string }
-export interface EmploymentProfile extends TenantEntity, ArchiveFields { userId: string; employeeNumber: string; primaryDepartmentId: string; jobTitle: string; status: EmploymentStatus; startDate: string; endDate?: string }
+export interface OrganizationMember extends TenantEntity { userId: string; status: 'invited' | 'active' | 'suspended' | 'left'; invitedAt: UtcIsoString; joinedAt?: UtcIsoString; leftAt?: UtcIsoString }
+export interface Invitation extends TenantEntity { userId: string; emailHash: string; status: 'pending' | 'accepted' | 'expired' | 'cancelled' | 'failed'; expiresAt: UtcIsoString; acceptedAt?: UtcIsoString }
+export interface EmploymentProfile extends TenantEntity, ArchiveFields { userId: string; employeeNumber: string; employmentType: 'employee' | 'contractor'; primaryDepartmentId: string; jobTitle: string; managerUserId?: string; workScheduleId?: string; status: EmploymentStatus; startDate: string; endDate?: string; endReason?: string }
 export interface Role extends TenantEntity, ArchiveFields { name: string; permissions: readonly string[]; policyVersion: number; status: 'active' | 'archived' }
 export interface PermissionDefinition extends TenantEntity { key: string; description: string; sensitivity: 'low' | 'medium' | 'high' | 'critical' }
 export interface RoleAssignment extends TenantEntity { userId: string; roleId: string; scopeType: string; scopeId: string; effect: 'grant' | 'deny'; status: 'active' | 'revoked'; startsAt?: UtcIsoString; expiresAt?: UtcIsoString }
@@ -74,7 +76,7 @@ export interface CustomFieldDefinition extends TenantEntity, ArchiveFields { res
 export interface CustomFieldValue extends TenantEntity { definitionId: string; resourceType: string; resourceId: string; value: unknown }
 
 export const ENTITY_DESCRIPTORS = [
-  'organization', 'organization_settings', 'department', 'team', 'user_profile', 'employment_profile',
+  'organization', 'organization_settings', 'department', 'team', 'user_profile', 'organization_membership', 'invitation', 'employment_profile',
   'role', 'permission_definition', 'role_assignment', 'team_membership', 'client', 'client_contact', 'project',
   'project_member', 'workspace', 'task', 'subtask', 'checklist', 'checklist_item', 'task_assignment', 'task_watcher',
   'tag', 'workflow_template', 'workflow_version', 'workflow_stage', 'workflow_transition', 'task_workflow_instance',
