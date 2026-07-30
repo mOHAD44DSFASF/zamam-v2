@@ -220,12 +220,15 @@ export class ReviewService {
       if (task.version !== input.reviewedVersion || input.reviewedVersion <= Number(request.reviewedVersion)) throw new Error('REVIEWED_VERSION_STALE')
       const round = Number(request.round) + 1
       const approvalIds = reviewerUserIds.map((reviewer) => approvalId(input.reviewRequestId, round, reviewer))
+      // Read phase — the prior change_request is read before any write (Firestore transaction rule; the
+      // approval creates previously preceded this read).
+      const priorChangePath = tenantDocumentPath(metadata.organizationId, 'change_request', changeId(input.reviewRequestId, Number(request.round)))
+      const priorChange = await transaction.get(priorChangePath)
+      // Write phase.
       approvalIds.forEach((recordId, order) => transaction.create(
         tenantDocumentPath(metadata.organizationId, 'approval', recordId),
         { ...base(metadata.organizationId), reviewRequestId: input.reviewRequestId, round, reviewerUserId: reviewerUserIds[order], order, reviewedVersion: input.reviewedVersion, status: 'pending' },
       ))
-      const priorChangePath = tenantDocumentPath(metadata.organizationId, 'change_request', changeId(input.reviewRequestId, Number(request.round)))
-      const priorChange = await transaction.get(priorChangePath)
       if (priorChange?.status === 'open') transaction.update(priorChangePath, { status: 'resolved', resolvedAt: this.clock.now(), updatedAt: SERVER_TIMESTAMP, version: Number(priorChange.version) + 1 })
       transaction.update(requestPath, {
         status: 'requested', round, reviewedVersion: input.reviewedVersion, approvalIds,
@@ -296,11 +299,16 @@ export class ReviewService {
       const request = await owned(transaction, requestPath, metadata.organizationId)
       if (request.version !== expectedRequestVersion || !['requested', 'in_review'].includes(String(request.status))) throw new Error('REVIEW_REQUEST_NOT_ACTIVE')
       if (!request.dueAt || String(request.dueAt) > now) throw new Error('REVIEW_NOT_EXPIRED')
+      // Read phase — every pending approval is read before any write (Firestore transaction rule; the
+      // loop previously read then updated each approval in turn).
+      const pendingApprovalUpdates: { path: string; version: number }[] = []
       for (const recordId of request.approvalIds as string[]) {
         const approvalPath = tenantDocumentPath(metadata.organizationId, 'approval', recordId)
         const approval = await owned(transaction, approvalPath, metadata.organizationId)
-        if (approval.status === 'pending') transaction.update(approvalPath, { status: 'expired', version: Number(approval.version) + 1, updatedAt: SERVER_TIMESTAMP })
+        if (approval.status === 'pending') pendingApprovalUpdates.push({ path: approvalPath, version: Number(approval.version) + 1 })
       }
+      // Write phase.
+      for (const update of pendingApprovalUpdates) transaction.update(update.path, { status: 'expired', version: update.version, updatedAt: SERVER_TIMESTAMP })
       transaction.update(requestPath, { status: 'expired', completedAt: now, version: expectedRequestVersion + 1, updatedAt: SERVER_TIMESTAMP })
       return {
         result: { reviewRequestId, status: 'expired' as const },

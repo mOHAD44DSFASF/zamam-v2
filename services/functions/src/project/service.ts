@@ -152,15 +152,19 @@ export class ProjectService {
       }
       const manager = await readOwned(transaction, tenantDocumentPath(metadata.organizationId, 'employment_profile', input.managerUserId), metadata.organizationId)
       if (manager.status !== 'active') throw new Error('PROJECT_MANAGER_NOT_ACTIVE')
+      // Read phase — all get()s before any write (Firestore transaction rule).
       const path = tenantDocumentPath(metadata.organizationId, 'project', input.id)
-      if (await transaction.get(path)) throw new Error('ENTITY_ALREADY_EXISTS')
+      const existingProject = await transaction.get(path)
       const uniquePath = systemPath(metadata.organizationId, '_uniqueProjectCodes', stableId('project', input.code))
-      if ((await transaction.get(uniquePath))?.active === true) throw new Error('PROJECT_CODE_ALREADY_EXISTS')
-      transaction.create(path, { ...baseRecord(metadata.organizationId), ...input, status: 'draft' })
-      transaction.create(uniquePath, { ...baseRecord(metadata.organizationId), active: true, projectId: input.id, normalizedCode: input.code })
+      const uniqueCode = await transaction.get(uniquePath)
       const countPath = systemPath(metadata.organizationId, '_clientActiveProjectCounts', input.clientId)
       const counter = await transaction.get(countPath)
+      if (existingProject) throw new Error('ENTITY_ALREADY_EXISTS')
+      if (uniqueCode?.active === true) throw new Error('PROJECT_CODE_ALREADY_EXISTS')
       const value = numeric(counter?.value ?? 0) + 1
+      // Write phase.
+      transaction.create(path, { ...baseRecord(metadata.organizationId), ...input, status: 'draft' })
+      transaction.create(uniquePath, { ...baseRecord(metadata.organizationId), active: true, projectId: input.id, normalizedCode: input.code })
       if (counter) transaction.update(countPath, { value, updatedAt: SERVER_TIMESTAMP })
       else transaction.create(countPath, { ...baseRecord(metadata.organizationId), value })
       return {
@@ -316,12 +320,14 @@ export class ProjectService {
       if (project.version !== expectedVersion) throw new Error('VERSION_CONFLICT')
       assertProjectStatusTransition(String(project.status), 'archived')
       const version = expectedVersion + 1
-      transaction.update(path, { status: 'archived', archivedAt: SERVER_TIMESTAMP, version, updatedAt: SERVER_TIMESTAMP })
+      // Read phase — all get()s before any write (Firestore transaction rule).
       const codePath = systemPath(metadata.organizationId, '_uniqueProjectCodes', stableId('project', String(project.code)))
       const code = await transaction.get(codePath)
-      if (code) transaction.update(codePath, { active: false, updatedAt: SERVER_TIMESTAMP })
       const countPath = systemPath(metadata.organizationId, '_clientActiveProjectCounts', String(project.clientId))
       const counter = await transaction.get(countPath)
+      // Write phase.
+      transaction.update(path, { status: 'archived', archivedAt: SERVER_TIMESTAMP, version, updatedAt: SERVER_TIMESTAMP })
+      if (code) transaction.update(codePath, { active: false, updatedAt: SERVER_TIMESTAMP })
       if (counter) transaction.update(countPath, { value: Math.max(0, numeric(counter.value) - 1), updatedAt: SERVER_TIMESTAMP })
       return {
         result: { projectId, version, status: 'archived' as const },

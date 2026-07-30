@@ -145,11 +145,11 @@ export class WorkloadProjectionService {
       fingerprint: metadata.fingerprint,
     }
     return this.audit.execute(context, async (transaction) => {
-      for (const { member, calculation } of projections) {
-        const capacityPlanId = recordId(input.periodStart, member.userId)
-        const path = tenantDocumentPath(
-          metadata.organizationId, 'capacity_plan', capacityPlanId,
-        )
+      // Read phase — every capacity_plan doc is read before any write (Firestore transaction rule; the
+      // loop previously read then update/create'd each plan in turn, so the second iteration's get()
+      // followed the first iteration's write).
+      const plans = await Promise.all(projections.map(async ({ member, calculation }) => {
+        const path = tenantDocumentPath(metadata.organizationId, 'capacity_plan', recordId(input.periodStart, member.userId))
         const current = await transaction.get(path)
         const data = {
           organizationId: metadata.organizationId, schemaVersion: SCHEMA_VERSION,
@@ -171,12 +171,12 @@ export class WorkloadProjectionService {
             ? {} : { utilizationPercent: calculation.utilizationPercent }),
           calculatedAt: SERVER_TIMESTAMP, updatedAt: SERVER_TIMESTAMP,
         }
-        if (current) transaction.update(path, {
-          ...data, version: Number(current.version) + 1,
-        })
-        else transaction.create(path, {
-          ...data, version: 1, createdAt: SERVER_TIMESTAMP,
-        })
+        return { path, current, data }
+      }))
+      // Write phase.
+      for (const { path, current, data } of plans) {
+        if (current) transaction.update(path, { ...data, version: Number(current.version) + 1 })
+        else transaction.create(path, { ...data, version: 1, createdAt: SERVER_TIMESTAMP })
       }
       return {
         result: {

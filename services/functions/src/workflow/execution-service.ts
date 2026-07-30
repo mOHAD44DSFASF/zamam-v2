@@ -184,15 +184,19 @@ export class WorkflowExecutionService {
         ? Number(instance.cycle) + 1 : Number(instance.cycle)
       const nextStageId = `${instance.workflowVersionId}_${nextStage.key}`
       const dueAt = nextStage.slaMinutes ? await this.calendar.addBusinessMinutes(metadata.organizationId, now, nextStage.slaMinutes) : undefined
+      // Read phase — both the current and next stage-execution docs are read before any write (Firestore
+      // transaction rule; the next-execution get() previously followed the current-execution update()).
       const currentExecutionPath = tenantDocumentPath(metadata.organizationId, 'task_stage_execution', executionId(input.instanceId, Number(instance.cycle), String(instance.currentStageKey)))
       const currentExecution = await owned(transaction, currentExecutionPath, metadata.organizationId)
+      const nextExecutionPath = tenantDocumentPath(metadata.organizationId, 'task_stage_execution', executionId(input.instanceId, nextCycle, nextStage.key))
+      const nextExecutionExisting = await transaction.get(nextExecutionPath)
       if (currentExecution.status !== 'active') throw new Error('WORKFLOW_EXECUTION_RACE')
+      if (nextExecutionExisting) throw new Error('WORKFLOW_EXECUTION_ALREADY_EXISTS')
+      // Write phase.
       transaction.update(currentExecutionPath, {
         status: 'completed', exitedAt: now, transitionId: transition.key,
         version: Number(currentExecution.version) + 1, updatedAt: SERVER_TIMESTAMP,
       })
-      const nextExecutionPath = tenantDocumentPath(metadata.organizationId, 'task_stage_execution', executionId(input.instanceId, nextCycle, nextStage.key))
-      if (await transaction.get(nextExecutionPath)) throw new Error('WORKFLOW_EXECUTION_ALREADY_EXISTS')
       transaction.create(nextExecutionPath, {
         ...base(metadata.organizationId), workflowInstanceId: input.instanceId, stageId: nextStageId,
         stageKey: nextStage.key, cycle: nextCycle, status: nextStage.terminal ? 'completed' : 'active',

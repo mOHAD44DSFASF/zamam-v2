@@ -282,25 +282,29 @@ export class ClientService {
       const client = await readOwned(transaction, path, metadata.organizationId)
       if (client.version !== expectedVersion) throw new Error('VERSION_CONFLICT')
       assertClientStatusTransition(String(client.status), 'archived')
+      // Read phase — the client, its project counter, every contact, and the unique-code index are all
+      // read before any write (Firestore transaction rule; the contact loop previously wrote per contact
+      // then read the unique-code index afterward).
       const projectCount = await transaction.get(systemPath(metadata.organizationId, '_clientActiveProjectCounts', clientId))
       assertCanArchiveClient(count(projectCount))
+      const contactUpdates: { path: string; version: number }[] = []
       for (const reference of contacts) {
         idSchema.parse(reference.id)
         versionSchema.parse(reference.expectedVersion)
         const contactPath = tenantDocumentPath(metadata.organizationId, 'client_contact', reference.id)
         const contact = await readOwned(transaction, contactPath, metadata.organizationId)
         if (contact.clientId !== clientId || contact.version !== reference.expectedVersion) throw new Error('CONTACT_REFERENCE_CONFLICT')
-        transaction.update(contactPath, {
-          portalStatus: 'disabled',
-          version: reference.expectedVersion + 1,
-          updatedAt: SERVER_TIMESTAMP,
-        })
+        contactUpdates.push({ path: contactPath, version: reference.expectedVersion + 1 })
         if (reference.userId) portalUsers.push(reference.userId)
       }
-      const version = expectedVersion + 1
-      transaction.update(path, { status: 'archived', archivedAt: SERVER_TIMESTAMP, version, updatedAt: SERVER_TIMESTAMP })
       const uniquePath = systemPath(metadata.organizationId, '_uniqueClientCodes', stableId('client', String(client.code)))
       const unique = await transaction.get(uniquePath)
+      const version = expectedVersion + 1
+      // Write phase.
+      for (const contactUpdate of contactUpdates) {
+        transaction.update(contactUpdate.path, { portalStatus: 'disabled', version: contactUpdate.version, updatedAt: SERVER_TIMESTAMP })
+      }
+      transaction.update(path, { status: 'archived', archivedAt: SERVER_TIMESTAMP, version, updatedAt: SERVER_TIMESTAMP })
       if (unique) transaction.update(uniquePath, { active: false, updatedAt: SERVER_TIMESTAMP })
       return {
         result: { clientId, status: 'archived' as const, version, disabledContacts: contacts.length },

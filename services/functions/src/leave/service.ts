@@ -37,10 +37,13 @@ export class LeaveService {
     if (Number(balance.allowanceDays) - Number(balance.usedDays) - Number(balance.pendingDays) < quantityDays) throw new Error('LEAVE_BALANCE_INSUFFICIENT')
     const context = await this.context(metadata, 'leave.request', metadata.principal.userId, input.id)
     return this.audit.execute(context, async (transaction) => {
-      transaction.create(tenantDocumentPath(metadata.organizationId, 'leave_request', input.id), { ...base(metadata.organizationId), userId: metadata.principal.userId, leaveTypeId: input.leaveTypeId, startsOn: input.startsOn, endsOn: input.endsOn, quantityDays, reason: input.reason, status: 'submitted', requiredApproverIds, currentApprovalStep: 0, balanceId: balanceRecordId })
+      // Read phase — the balance is read before any write (Firestore transaction rule; the leave_request
+      // create previously preceded this read).
       const balancePath = tenantDocumentPath(metadata.organizationId, 'leave_balance', balanceRecordId)
       const current = await transaction.get(balancePath)
       if (!current || current.version !== balance.version) throw new Error('VERSION_CONFLICT')
+      // Write phase.
+      transaction.create(tenantDocumentPath(metadata.organizationId, 'leave_request', input.id), { ...base(metadata.organizationId), userId: metadata.principal.userId, leaveTypeId: input.leaveTypeId, startsOn: input.startsOn, endsOn: input.endsOn, quantityDays, reason: input.reason, status: 'submitted', requiredApproverIds, currentApprovalStep: 0, balanceId: balanceRecordId })
       transaction.update(balancePath, { pendingDays: Number(current.pendingDays) + quantityDays, version: Number(current.version) + 1, updatedAt: SERVER_TIMESTAMP })
       const ledgerId = `leave-ledger-reserve-${input.id}`
       transaction.create(tenantDocumentPath(metadata.organizationId, 'leave_ledger', ledgerId), { ...base(metadata.organizationId), leaveRequestId: input.id, leaveBalanceId: balanceRecordId, quantityDays, operation: 'reserve', occurredAt: SERVER_TIMESTAMP })
@@ -64,13 +67,17 @@ export class LeaveService {
       if (!current || current.version !== expectedVersion) throw new Error('VERSION_CONFLICT')
       const finalApproval = decision === 'approved' && step === chain.length - 1
       const nextStatus = decision === 'rejected' ? 'rejected' : finalApproval ? 'approved' : 'submitted'
+      const touchesBalance = finalApproval || decision === 'rejected'
+      // Read phase — the balance (only touched on final approval/rejection) is read before any write
+      // (Firestore transaction rule; the approval create + request update previously preceded this read).
+      const balancePath = tenantDocumentPath(metadata.organizationId, 'leave_balance', String(current.balanceId))
+      const balance = touchesBalance ? await transaction.get(balancePath) : null
+      if (touchesBalance && !balance) throw new Error('LEAVE_BALANCE_UNAVAILABLE')
+      // Write phase.
       const approvalId = `leave-approval-${requestId}-${step + 1}`
       transaction.create(tenantDocumentPath(metadata.organizationId, 'leave_approval', approvalId), { ...base(metadata.organizationId), leaveRequestId: requestId, step: step + 1, approverUserId: metadata.principal.userId, decision, ...(reason ? { reason: reason.trim() } : {}), decidedAt: SERVER_TIMESTAMP })
       transaction.update(path, { status: nextStatus, currentApprovalStep: decision === 'approved' ? step + 1 : step, ...(nextStatus !== 'submitted' ? { decidedAt: SERVER_TIMESTAMP } : {}), version: expectedVersion + 1, updatedAt: SERVER_TIMESTAMP })
-      if (finalApproval || decision === 'rejected') {
-        const balancePath = tenantDocumentPath(metadata.organizationId, 'leave_balance', String(current.balanceId))
-        const balance = await transaction.get(balancePath)
-        if (!balance) throw new Error('LEAVE_BALANCE_UNAVAILABLE')
+      if (touchesBalance && balance) {
         const quantity = Number(current.quantityDays)
         transaction.update(balancePath, { pendingDays: Math.max(0, Number(balance.pendingDays) - quantity), usedDays: Number(balance.usedDays) + (finalApproval ? quantity : 0), version: Number(balance.version) + 1, updatedAt: SERVER_TIMESTAMP })
         const operation = finalApproval ? 'consume' : 'release'

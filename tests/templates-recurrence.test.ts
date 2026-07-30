@@ -11,10 +11,11 @@ class MemoryStore implements AtomicStore {
   records = new Map<string, StoredDocument>()
   async runTransaction<TResult>(operation: (transaction: AtomicTransaction) => Promise<TResult>) {
     const working = new Map([...this.records].map(([path, value]) => [path, { ...value }]))
+    let writeStarted = false
     const transaction: AtomicTransaction = {
-      get: async (path) => working.get(path) ?? null,
-      create: (path, data) => { if (working.has(path)) throw new Error('ALREADY_EXISTS'); working.set(path, { ...data }) },
-      update: (path, data) => { const current = working.get(path); if (!current) throw new Error('NOT_FOUND'); working.set(path, { ...current, ...data }) },
+      get: async (path) => { if (writeStarted) throw new Error(`FIRESTORE_TRANSACTION_READ_AFTER_WRITE: ${path}`); return working.get(path) ?? null },
+      create: (path, data) => { writeStarted = true; if (working.has(path)) throw new Error('ALREADY_EXISTS'); working.set(path, { ...data }) },
+      update: (path, data) => { writeStarted = true; const current = working.get(path); if (!current) throw new Error('NOT_FOUND'); working.set(path, { ...current, ...data }) },
     }
     const result = await operation(transaction); this.records = working; return result
   }

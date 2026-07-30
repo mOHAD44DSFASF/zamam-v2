@@ -216,6 +216,9 @@ export class TimeTrackingService {
       if (existing && !['open', 'rejected'].includes(String(existing.status))) {
         throw new Error('TIMESHEET_NOT_OPEN')
       }
+      // Read phase — every entry is read before any write (Firestore transaction rule; the loop
+      // previously read then updated each entry in turn).
+      const entryUpdates: { path: string; version: number }[] = []
       for (const entry of entries) {
         const entryId = stringValue(entry, 'id')
         const path = tenantDocumentPath(metadata.organizationId, 'time_entry', entryId)
@@ -223,10 +226,11 @@ export class TimeTrackingService {
         if (!current || !['draft', 'rejected'].includes(String(current.status))) {
           throw new Error('TIMESHEET_ENTRY_STATE_CHANGED')
         }
-        transaction.update(path, {
-          status: 'submitted', timesheetId: sheetId,
-          version: Number(current.version) + 1, updatedAt: SERVER_TIMESTAMP,
-        })
+        entryUpdates.push({ path, version: Number(current.version) + 1 })
+      }
+      // Write phase.
+      for (const update of entryUpdates) {
+        transaction.update(update.path, { status: 'submitted', timesheetId: sheetId, version: update.version, updatedAt: SERVER_TIMESTAMP })
       }
       const data = {
         userId: metadata.principal.userId, periodStart, periodEnd,
@@ -266,14 +270,21 @@ export class TimeTrackingService {
       const current = await transaction.get(path)
       if (!current || current.version !== input.expectedVersion) throw new Error('VERSION_CONFLICT')
       if (current.status !== 'submitted') throw new Error('TIMESHEET_NOT_SUBMITTED')
+      // Read phase — every entry is read before any write (Firestore transaction rule; the loop
+      // previously read then updated each entry in turn).
+      const entryUpdates: { path: string; version: number }[] = []
       for (const entry of entries.filter((candidate) => candidate.timesheetId === sheetId)) {
         const entryId = stringValue(entry, 'id')
         const entryPath = tenantDocumentPath(metadata.organizationId, 'time_entry', entryId)
         const stored = await transaction.get(entryPath)
         if (!stored || stored.status !== 'submitted') throw new Error('TIMESHEET_ENTRY_STATE_CHANGED')
-        transaction.update(entryPath, {
+        entryUpdates.push({ path: entryPath, version: Number(stored.version) + 1 })
+      }
+      // Write phase.
+      for (const update of entryUpdates) {
+        transaction.update(update.path, {
           status: input.decision === 'approved' ? 'approved' : 'rejected',
-          version: Number(stored.version) + 1, updatedAt: SERVER_TIMESTAMP,
+          version: update.version, updatedAt: SERVER_TIMESTAMP,
         })
       }
       transaction.update(path, {

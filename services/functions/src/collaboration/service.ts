@@ -239,8 +239,15 @@ export class CollaborationService {
           throw new Error('COMMENT_REVIEW_SCOPE_CONFLICT')
         }
       }
+      // Read phase — the comment-exists check and the task-watcher lookup both happen before any write
+      // (Firestore transaction rule; the watcher get() previously followed the comment/mention creates).
       const path = tenantDocumentPath(metadata.organizationId, 'comment', input.id)
-      if (await transaction.get(path)) throw new Error('ENTITY_ALREADY_EXISTS')
+      const existingComment = await transaction.get(path)
+      const watcherId = input.resourceType === 'task' ? deterministicId(input.resourceId, metadata.principal.userId) : null
+      const watcherPath = watcherId ? tenantDocumentPath(metadata.organizationId, 'task_watcher', watcherId) : null
+      const existingWatcher = watcherPath ? await transaction.get(watcherPath) : null
+      if (existingComment) throw new Error('ENTITY_ALREADY_EXISTS')
+      // Write phase.
       transaction.create(path, {
         ...base(metadata.organizationId),
         resourceType: input.resourceType,
@@ -265,18 +272,14 @@ export class CollaborationService {
           status: 'active',
         })
       }
-      if (input.resourceType === 'task') {
-        const watcherId = deterministicId(input.resourceId, metadata.principal.userId)
-        const watcherPath = tenantDocumentPath(metadata.organizationId, 'task_watcher', watcherId)
-        if (!await transaction.get(watcherPath)) {
-          transaction.create(watcherPath, {
-            ...base(metadata.organizationId),
-            taskId: input.resourceId,
-            userId: metadata.principal.userId,
-            source: 'comment',
-            status: 'active',
-          })
-        }
+      if (watcherPath && !existingWatcher) {
+        transaction.create(watcherPath, {
+          ...base(metadata.organizationId),
+          taskId: input.resourceId,
+          userId: metadata.principal.userId,
+          source: 'comment',
+          status: 'active',
+        })
       }
       return {
         result: { commentId: input.id, version: 1, mentionCount: mentionedUserIds.length },

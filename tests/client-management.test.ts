@@ -18,13 +18,21 @@ class MemoryStore implements AtomicStore {
   records = new Map<string, StoredDocument>()
   async runTransaction<TResult>(operation: (transaction: AtomicTransaction) => Promise<TResult>): Promise<TResult> {
     const working = new Map([...this.records].map(([path, value]) => [path, { ...value }]))
+    // Enforces Firestore's "all reads before all writes" rule so an interleaved get-after-write in a
+    // service transaction is caught here instead of only against the real emulator.
+    let writeStarted = false
     const transaction: AtomicTransaction = {
-      get: async (path) => working.get(path) ?? null,
+      get: async (path) => {
+        if (writeStarted) throw new Error(`FIRESTORE_TRANSACTION_READ_AFTER_WRITE: read of "${path}" after a write`)
+        return working.get(path) ?? null
+      },
       create: (path, data) => {
+        writeStarted = true
         if (working.has(path)) throw new Error('ALREADY_EXISTS')
         working.set(path, { ...data })
       },
       update: (path, data) => {
+        writeStarted = true
         const current = working.get(path)
         if (!current) throw new Error('NOT_FOUND')
         working.set(path, { ...current, ...data })

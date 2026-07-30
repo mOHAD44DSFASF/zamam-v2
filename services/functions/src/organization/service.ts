@@ -239,12 +239,14 @@ export class OrganizationStructureService {
       const department = await readOwned(transaction, path, metadata.organizationId)
       if (department.status !== 'active') throw new Error('DEPARTMENT_NOT_ACTIVE')
       if (department.version !== expectedVersion) throw new Error('VERSION_CONFLICT')
+      // Read phase — all get()s before any write (Firestore transaction rule).
       const teamCounter = await transaction.get(systemPath(metadata.organizationId, '_departmentActiveTeamCounts', departmentId))
-      assertCanArchiveDepartment(countValue(teamCounter))
-      const version = expectedVersion + 1
-      transaction.update(path, { status: 'archived', deletedAt: SERVER_TIMESTAMP, updatedAt: SERVER_TIMESTAMP, version })
       const uniquePath = systemPath(metadata.organizationId, '_uniqueDepartmentCodes', stableId('department', String(department.code)))
       const unique = await transaction.get(uniquePath)
+      assertCanArchiveDepartment(countValue(teamCounter))
+      const version = expectedVersion + 1
+      // Write phase.
+      transaction.update(path, { status: 'archived', deletedAt: SERVER_TIMESTAMP, updatedAt: SERVER_TIMESTAMP, version })
       if (unique) transaction.update(uniquePath, { active: false, updatedAt: SERVER_TIMESTAMP })
       return {
         result: { departmentId, version },
@@ -268,17 +270,20 @@ export class OrganizationStructureService {
     return this.audit.execute(context, async (transaction) => {
       const department = await readOwned(transaction, tenantDocumentPath(metadata.organizationId, 'department', departmentId), metadata.organizationId)
       if (department.status !== 'active') throw new Error('DEPARTMENT_NOT_ACTIVE')
+      // Read phase — all get()s before any write (Firestore transaction rule).
       const path = tenantDocumentPath(metadata.organizationId, 'team', input.id)
-      if (await transaction.get(path)) throw new Error('ENTITY_ALREADY_EXISTS')
+      const existingTeam = await transaction.get(path)
       const uniquePath = systemPath(metadata.organizationId, '_uniqueTeamCodes', stableId('team', input.code))
       const unique = await transaction.get(uniquePath)
+      const countPath = systemPath(metadata.organizationId, '_departmentActiveTeamCounts', departmentId)
+      const counter = await transaction.get(countPath)
+      if (existingTeam) throw new Error('ENTITY_ALREADY_EXISTS')
       if (unique?.active === true) throw new Error('TEAM_CODE_ALREADY_EXISTS')
+      const value = countValue(counter) + 1
+      // Write phase.
       transaction.create(path, { ...baseRecord(metadata.organizationId), ...input, departmentId, status: 'active' })
       if (unique) transaction.update(uniquePath, { active: true, entityId: input.id, updatedAt: SERVER_TIMESTAMP })
       else transaction.create(uniquePath, { ...baseRecord(metadata.organizationId), active: true, entityId: input.id, normalizedCode: input.code })
-      const countPath = systemPath(metadata.organizationId, '_departmentActiveTeamCounts', departmentId)
-      const counter = await transaction.get(countPath)
-      const value = countValue(counter) + 1
       if (counter) transaction.update(countPath, { value, updatedAt: SERVER_TIMESTAMP })
       else transaction.create(countPath, { ...baseRecord(metadata.organizationId), value })
       return {
@@ -301,16 +306,18 @@ export class OrganizationStructureService {
       const team = await readOwned(transaction, path, metadata.organizationId)
       if (team.status !== 'active') throw new Error('TEAM_NOT_ACTIVE')
       if (team.version !== expectedVersion) throw new Error('VERSION_CONFLICT')
+      // Read phase — all get()s before any write (Firestore transaction rule).
       const memberCounter = await transaction.get(systemPath(metadata.organizationId, '_teamActiveMemberCounts', teamId))
-      assertCanArchiveTeam(countValue(memberCounter))
-      const version = expectedVersion + 1
-      transaction.update(path, { status: 'archived', deletedAt: SERVER_TIMESTAMP, updatedAt: SERVER_TIMESTAMP, version })
       const uniquePath = systemPath(metadata.organizationId, '_uniqueTeamCodes', stableId('team', String(team.code)))
       const unique = await transaction.get(uniquePath)
-      if (unique) transaction.update(uniquePath, { active: false, updatedAt: SERVER_TIMESTAMP })
       const countPath = systemPath(metadata.organizationId, '_departmentActiveTeamCounts', String(team.departmentId))
       const counter = await transaction.get(countPath)
+      assertCanArchiveTeam(countValue(memberCounter))
+      const version = expectedVersion + 1
       const value = Math.max(0, countValue(counter) - 1)
+      // Write phase.
+      transaction.update(path, { status: 'archived', deletedAt: SERVER_TIMESTAMP, updatedAt: SERVER_TIMESTAMP, version })
+      if (unique) transaction.update(uniquePath, { active: false, updatedAt: SERVER_TIMESTAMP })
       if (counter) transaction.update(countPath, { value, updatedAt: SERVER_TIMESTAMP })
       return {
         result: { teamId, version },
@@ -328,29 +335,33 @@ export class OrganizationStructureService {
       type: 'team', id: input.teamId, organizationId: metadata.organizationId, teamId: input.teamId,
     })
     return this.audit.execute(context, async (transaction) => {
+      // Read phase — all get()s before any write (Firestore transaction rule).
       const team = await readOwned(transaction, tenantDocumentPath(metadata.organizationId, 'team', input.teamId), metadata.organizationId)
-      if (team.status !== 'active') throw new Error('TEAM_NOT_ACTIVE')
       const membershipId = stableId('membership', `${input.teamId}:${input.userId}`)
       const path = tenantDocumentPath(metadata.organizationId, 'team_membership', membershipId)
       const existing = await transaction.get(path)
-      if (existing?.status === 'active') throw new Error('TEAM_MEMBERSHIP_ALREADY_ACTIVE')
       const allocationPath = systemPath(metadata.organizationId, '_teamAllocationByUser', input.userId)
       const allocation = await transaction.get(allocationPath)
+      const primaryPath = systemPath(metadata.organizationId, '_primaryTeamByUser', input.userId)
+      const primary = input.isPrimary ? await transaction.get(primaryPath) : null
+      const memberCountPath = systemPath(metadata.organizationId, '_teamActiveMemberCounts', input.teamId)
+      const memberCount = await transaction.get(memberCountPath)
+
+      if (team.status !== 'active') throw new Error('TEAM_NOT_ACTIVE')
+      if (existing?.status === 'active') throw new Error('TEAM_MEMBERSHIP_ALREADY_ACTIVE')
       const nextAllocation = countValue(allocation) + (input.allocationPercent ?? 0)
       if (nextAllocation > 100) throw new Error('TEAM_ALLOCATION_EXCEEDED')
+      if (input.isPrimary && primary?.active === true && primary.teamId !== input.teamId) throw new Error('PRIMARY_TEAM_ALREADY_ASSIGNED')
+      const value = countValue(memberCount) + 1
+
+      // Write phase.
       if (input.isPrimary) {
-        const primaryPath = systemPath(metadata.organizationId, '_primaryTeamByUser', input.userId)
-        const primary = await transaction.get(primaryPath)
-        if (primary?.active === true && primary.teamId !== input.teamId) throw new Error('PRIMARY_TEAM_ALREADY_ASSIGNED')
         if (primary) transaction.update(primaryPath, { active: true, teamId: input.teamId, updatedAt: SERVER_TIMESTAMP })
         else transaction.create(primaryPath, { ...baseRecord(metadata.organizationId), active: true, teamId: input.teamId, userId: input.userId })
       }
       const record = { ...baseRecord(metadata.organizationId), ...input, status: 'active' }
       if (existing) transaction.update(path, { ...input, status: 'active', deletedAt: null, version: Number(existing.version) + 1, updatedAt: SERVER_TIMESTAMP })
       else transaction.create(path, record)
-      const memberCountPath = systemPath(metadata.organizationId, '_teamActiveMemberCounts', input.teamId)
-      const memberCount = await transaction.get(memberCountPath)
-      const value = countValue(memberCount) + 1
       if (memberCount) transaction.update(memberCountPath, { value, updatedAt: SERVER_TIMESTAMP })
       else transaction.create(memberCountPath, { ...baseRecord(metadata.organizationId), value })
       if (allocation) transaction.update(allocationPath, { value: nextAllocation, updatedAt: SERVER_TIMESTAMP })
@@ -378,21 +389,21 @@ export class OrganizationStructureService {
       if (membership.status !== 'active') throw new Error('TEAM_MEMBERSHIP_NOT_ACTIVE')
       if (membership.version !== expectedVersion) throw new Error('VERSION_CONFLICT')
       const version = expectedVersion + 1
-      transaction.update(path, { status: 'ended', endedAt: SERVER_TIMESTAMP, updatedAt: SERVER_TIMESTAMP, version })
+      // Read phase — all get()s before any write (Firestore transaction rule).
       const memberCountPath = systemPath(metadata.organizationId, '_teamActiveMemberCounts', teamId)
       const memberCount = await transaction.get(memberCountPath)
-      if (memberCount) transaction.update(memberCountPath, { value: Math.max(0, countValue(memberCount) - 1), updatedAt: SERVER_TIMESTAMP })
       const allocationPath = systemPath(metadata.organizationId, '_teamAllocationByUser', userId)
       const allocation = await transaction.get(allocationPath)
+      const primaryPath = systemPath(metadata.organizationId, '_primaryTeamByUser', userId)
+      const primary = membership.isPrimary === true ? await transaction.get(primaryPath) : null
+      // Write phase.
+      transaction.update(path, { status: 'ended', endedAt: SERVER_TIMESTAMP, updatedAt: SERVER_TIMESTAMP, version })
+      if (memberCount) transaction.update(memberCountPath, { value: Math.max(0, countValue(memberCount) - 1), updatedAt: SERVER_TIMESTAMP })
       if (allocation) transaction.update(allocationPath, {
         value: Math.max(0, countValue(allocation) - Number(membership.allocationPercent ?? 0)),
         updatedAt: SERVER_TIMESTAMP,
       })
-      if (membership.isPrimary === true) {
-        const primaryPath = systemPath(metadata.organizationId, '_primaryTeamByUser', userId)
-        const primary = await transaction.get(primaryPath)
-        if (primary) transaction.update(primaryPath, { active: false, updatedAt: SERVER_TIMESTAMP })
-      }
+      if (membership.isPrimary === true && primary) transaction.update(primaryPath, { active: false, updatedAt: SERVER_TIMESTAMP })
       return {
         result: { membershipId, version },
         resourceType: 'team_membership',
