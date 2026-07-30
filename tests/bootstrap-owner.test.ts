@@ -2,17 +2,34 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AtomicStore, AtomicTransaction, StoredDocument } from '@zamam/firestore'
 import { BootstrapOwnerService, type OwnerIdentityPort } from '../services/functions/src/organization/bootstrap-service'
 
+/**
+ * Enforces the real Firestore transaction rule ("all reads before any writes") that a plain Map-backed
+ * fake would silently let slide — this is what actually catches an interleaved get/create regression
+ * like the one in bootstrap-service.ts, instead of only exercising the happy path against a fake that
+ * doesn't share Firestore's constraints.
+ */
 class MemoryStore implements AtomicStore {
   records = new Map<string, StoredDocument>()
   async runTransaction<TResult>(operation: (transaction: AtomicTransaction) => Promise<TResult>): Promise<TResult> {
     const working = new Map([...this.records].map(([path, value]) => [path, { ...value }]))
+    let writeStarted = false
     const transaction: AtomicTransaction = {
-      get: async (path) => working.get(path) ?? null,
+      get: async (path) => {
+        if (writeStarted) {
+          throw new Error(
+            `FIRESTORE_TRANSACTION_READ_AFTER_WRITE: read of "${path}" occurred after a write was already ` +
+            'queued in this transaction; Firestore requires all reads to happen before any writes.',
+          )
+        }
+        return working.get(path) ?? null
+      },
       create: (path, data) => {
+        writeStarted = true
         if (working.has(path)) throw new Error('ALREADY_EXISTS')
         working.set(path, { ...data })
       },
       update: (path, data) => {
+        writeStarted = true
         const current = working.get(path)
         if (!current) throw new Error('NOT_FOUND')
         working.set(path, { ...current, ...data })
@@ -119,5 +136,16 @@ describe('BootstrapOwnerService', () => {
     const result = await service.bootstrap({ ...input, ownerPassword: undefined })
     expect(result.actions.passwordSet).toBe(false)
     expect(identityPort.setPassword).not.toHaveBeenCalled()
+  })
+
+  it('never reads after it has started writing within the transaction (real Firestore transactions reject that)', async () => {
+    // MemoryStore's transaction fake throws FIRESTORE_TRANSACTION_READ_AFTER_WRITE the moment a get()
+    // happens after a create()/update() — the same "all reads before any writes" rule the real Firestore
+    // Admin SDK enforces. A full bootstrap touches all seven entities, so this exercises every read/write
+    // pair the service performs.
+    const store = new MemoryStore()
+    const identityPort = identities()
+    const service = new BootstrapOwnerService(store, identityPort, () => new Date('2026-01-01T00:00:00.000Z'))
+    await expect(service.bootstrap(input)).resolves.toBeDefined()
   })
 })

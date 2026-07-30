@@ -92,13 +92,31 @@ export class BootstrapOwnerService {
     const startDate = this.now().toISOString().slice(0, 10)
 
     const actions = await this.store.runTransaction(async (transaction) => {
+      // Firestore transactions require every read to happen before any write, so all six existence
+      // checks are resolved first (phase 1) and every transaction.create() call happens afterward
+      // (phase 2) — never interleaved per-entity.
+      const organizationPath = tenantDocumentPath(input.organizationId, 'organization', input.organizationId)
+      const departmentPath = tenantDocumentPath(input.organizationId, 'department', ROOT_DEPARTMENT_ID)
+      const membershipPath = tenantDocumentPath(input.organizationId, 'organization_membership', identity.userId)
+      const employmentPath = tenantDocumentPath(input.organizationId, 'employment_profile', identity.userId)
+      const profilePath = tenantDocumentPath(input.organizationId, 'user_profile', identity.userId)
+      const rolePath = tenantDocumentPath(input.organizationId, 'role', OWNER_ROLE_ID)
+      const assignmentPath = tenantDocumentPath(input.organizationId, 'role_assignment', roleAssignmentId)
+
+      const existingOrganization = await transaction.get(organizationPath)
+      const existingDepartment = await transaction.get(departmentPath)
+      const existingMembership = await transaction.get(membershipPath)
+      const existingEmployment = await transaction.get(employmentPath)
+      const existingProfile = await transaction.get(profilePath)
+      const existingRole = await transaction.get(rolePath)
+      const existingAssignment = await transaction.get(assignmentPath)
+
       const result: BootstrapOwnerActions = {
         organizationCreated: false, departmentCreated: false, membershipCreated: false,
         employmentCreated: false, roleCreated: false, roleAssignmentCreated: false, passwordSet,
       }
 
-      const organizationPath = tenantDocumentPath(input.organizationId, 'organization', input.organizationId)
-      if (!(await transaction.get(organizationPath))) {
+      if (!existingOrganization) {
         transaction.create(organizationPath, {
           ...base(input.organizationId), name: normalizeDirectoryName(input.organizationName),
           slug: input.organizationSlug, status: 'active',
@@ -106,16 +124,14 @@ export class BootstrapOwnerService {
         result.organizationCreated = true
       }
 
-      const departmentPath = tenantDocumentPath(input.organizationId, 'department', ROOT_DEPARTMENT_ID)
-      if (!(await transaction.get(departmentPath))) {
+      if (!existingDepartment) {
         transaction.create(departmentPath, {
           ...base(input.organizationId), name: 'Executive', code: 'ROOT', status: 'active',
         })
         result.departmentCreated = true
       }
 
-      const membershipPath = tenantDocumentPath(input.organizationId, 'organization_membership', identity.userId)
-      if (!(await transaction.get(membershipPath))) {
+      if (!existingMembership) {
         transaction.create(membershipPath, {
           ...base(input.organizationId), userId: identity.userId, status: 'active',
           invitedAt: SERVER_TIMESTAMP, joinedAt: SERVER_TIMESTAMP,
@@ -123,8 +139,7 @@ export class BootstrapOwnerService {
         result.membershipCreated = true
       }
 
-      const employmentPath = tenantDocumentPath(input.organizationId, 'employment_profile', identity.userId)
-      if (!(await transaction.get(employmentPath))) {
+      if (!existingEmployment) {
         transaction.create(employmentPath, {
           ...base(input.organizationId), userId: identity.userId, employeeNumber: 'OWNER-1',
           employmentType: 'employee', primaryDepartmentId: ROOT_DEPARTMENT_ID, jobTitle: 'Owner',
@@ -133,16 +148,14 @@ export class BootstrapOwnerService {
         result.employmentCreated = true
       }
 
-      const profilePath = tenantDocumentPath(input.organizationId, 'user_profile', identity.userId)
-      if (!(await transaction.get(profilePath))) {
+      if (!existingProfile) {
         transaction.create(profilePath, {
           ...base(input.organizationId), userId: identity.userId, displayName,
           firstName: normalizeDirectoryName(input.ownerFirstName), locale: input.locale, timezone: input.timezone,
         })
       }
 
-      const rolePath = tenantDocumentPath(input.organizationId, 'role', OWNER_ROLE_ID)
-      if (!(await transaction.get(rolePath))) {
+      if (!existingRole) {
         transaction.create(rolePath, {
           ...base(input.organizationId), name: ownerRole.name,
           permissions: ownerRole.permissions, policyVersion: ownerRole.policyVersion, status: 'active',
@@ -150,8 +163,7 @@ export class BootstrapOwnerService {
         result.roleCreated = true
       }
 
-      const assignmentPath = tenantDocumentPath(input.organizationId, 'role_assignment', roleAssignmentId)
-      if (!(await transaction.get(assignmentPath))) {
+      if (!existingAssignment) {
         transaction.create(assignmentPath, {
           ...base(input.organizationId), userId: identity.userId, roleId: OWNER_ROLE_ID,
           scopeType: 'organization', scopeId: input.organizationId, effect: 'grant', status: 'active',
