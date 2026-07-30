@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { AlertTriangle, LoaderCircle, Plus, RefreshCw, Search, ShieldX, UserRound, Users, X } from 'lucide-react'
 import { useAuth } from '../../auth/auth-context'
+import { useTenant } from '../../tenant/tenant-context'
 import {
   employeeDirectoryClient,
   type EmployeeDirectoryClient,
@@ -146,8 +147,8 @@ export function EmployeeDirectoryScreen({ organizationId, client }: { organizati
 }
 
 export function EmployeeDirectoryPage() {
-  const { session } = useAuth()
-  const organizationId = session?.memberships[0]?.organizationId
+  useAuth()
+  const { organizationId } = useTenant()
   if (!organizationId) return <main dir="rtl" className="min-h-screen grid place-items-center">لا توجد عضوية مؤسسة نشطة.</main>
   return <EmployeeDirectoryScreen organizationId={organizationId} client={employeeDirectoryClient} />
 }

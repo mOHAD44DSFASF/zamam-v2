@@ -22,6 +22,9 @@ beforeEach(async () => {
     await setDoc(doc(context.firestore(), 'v2Organizations/org-1/task/task-1'), {
       organizationId: 'org-1', schemaVersion: 2, title: 'Sensitive task',
     })
+    await setDoc(doc(context.firestore(), 'v2Organizations/org-1/workspace/workspace-1'), {
+      organizationId: 'org-1', schemaVersion: 2, name: 'Sensitive workspace',
+    })
   })
 })
 
@@ -50,5 +53,15 @@ describe('Firestore authorization mutations', () => {
     }).firestore()
     await assertFails(getDoc(doc(forged, 'v2Organizations/org-1/task/task-1')))
     await assertFails(getDoc(doc(forged, 'v2Organizations/org-2/task/task-1')))
+  })
+
+  it('requires workspace data to pass through the trusted backend', async () => {
+    const forged = environment.authenticatedContext('user-1', {
+      organizationId: 'org-1', workspaceIds: ['workspace-1'], role: 'Owner',
+    }).firestore()
+    await assertFails(getDoc(doc(forged, 'v2Organizations/org-1/workspace/workspace-1')))
+    await assertFails(setDoc(doc(forged, 'v2Organizations/org-1/workspace_member/fake'), {
+      organizationId: 'org-1', workspaceId: 'workspace-1', userId: 'user-1', status: 'active',
+    }))
   })
 })

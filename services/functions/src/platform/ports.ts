@@ -1,4 +1,4 @@
-import type { AuthenticatedPrincipal, SystemProbeResult } from '@zamam/contracts'
+import type { AuthenticatedPrincipal } from '@zamam/contracts'
 import type { OutboxEvent } from '@zamam/domain'
 
 export interface TokenVerifier {
@@ -34,12 +34,12 @@ export interface IdempotencyEntry {
   operation: string
   fingerprint: string
   actorUserId: string
-  result?: SystemProbeResult
+  result?: unknown
 }
 
 export interface IdempotencyStore {
   get(key: string): Promise<IdempotencyEntry | null>
   create(key: string, entry: IdempotencyEntry): Promise<boolean>
-  complete(key: string, result: SystemProbeResult): Promise<void>
+  complete(key: string, result: unknown): Promise<void>
   remove(key: string): Promise<void>
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { AlertTriangle, Building2, LoaderCircle, Plus, RefreshCw, UsersRound, X } from 'lucide-react'
 import { useAuth } from '../../auth/auth-context'
+import { useTenant } from '../../tenant/tenant-context'
 import {
   organizationDirectoryClient,
   type OrganizationDirectoryClient,
@@ -229,8 +230,8 @@ export function OrganizationDirectoryScreen({
 }
 
 export function OrganizationAdminPage() {
-  const { session } = useAuth()
-  const organizationId = session?.memberships[0]?.organizationId
+  useAuth()
+  const { organizationId } = useTenant()
   if (!organizationId) return <main dir="rtl" className="min-h-screen grid place-items-center">لا توجد عضوية مؤسسة نشطة.</main>
   return <OrganizationDirectoryScreen organizationId={organizationId} client={organizationDirectoryClient} />
 }

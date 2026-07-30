@@ -5,6 +5,7 @@ import type { OutboxEvent } from '@zamam/domain'
 import { createApi, type ApiDependencies } from '../services/functions/src/api/api'
 import { InMemoryIdempotencyStore, InMemoryOutbox, InMemoryRateLimiter } from '../services/functions/src/platform/in-memory'
 import { processOutboxEvent, type EventDeliveryStore } from '../services/workers/src/worker'
+import { z } from 'zod'
 
 function apiFixture(overrides: Partial<ApiDependencies> = {}) {
   const records: LogRecord[] = []
@@ -97,6 +98,34 @@ describe('trusted API foundation', () => {
       expect(await limiter.consume('user-1', 20, 60)).toBe(true)
     }
     expect(await limiter.consume('user-1', 20, 60)).toBe(false)
+  })
+
+  it('composes typed feature routes behind the common trust boundary', async () => {
+    const handle = vi.fn().mockResolvedValue({ workspaceId: 'workspace-1' })
+    const { handler } = apiFixture({
+      routes: {
+        '/v1/workspaces/create': {
+          operation: 'workspace.create',
+          schema: z.object({ organizationId: z.string(), name: z.string().min(2) }).strict(),
+          handle,
+        },
+      },
+    })
+    const response = await handler(new Request('https://api.example.com/v1/workspaces/create', {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer test-token-123456', 'content-type': 'application/json',
+        'x-firebase-appcheck': 'test-app-check', 'x-correlation-id': 'correlation-456',
+        'x-idempotency-key': 'idempotency-456', origin: 'http://localhost:5173',
+      },
+      body: JSON.stringify({ organizationId: 'org-1', name: 'Workspace' }),
+    }))
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ data: { workspaceId: 'workspace-1' } })
+    expect(handle).toHaveBeenCalledWith(expect.objectContaining({
+      principal: expect.objectContaining({ userId: 'user-1' }),
+      correlationId: 'correlation-456', idempotencyKey: 'idempotency-456',
+    }), { organizationId: 'org-1', name: 'Workspace' })
   })
 })
 

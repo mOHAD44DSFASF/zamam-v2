@@ -23,6 +23,20 @@ export interface ApiDependencies {
   logger: ReturnType<typeof createLogger>
   allowedOrigins: ReadonlySet<string>
   now?: () => Date
+  routes?: Readonly<Record<string, TrustedApiRoute>>
+}
+
+export interface TrustedApiRouteContext {
+  principal: AuthenticatedPrincipal
+  correlationId: string
+  idempotencyKey: string
+  request: Request
+}
+export interface TrustedApiRoute {
+  operation: string
+  schema: z.ZodType
+  rateLimit?: number
+  handle(context: TrustedApiRouteContext, input: unknown): Promise<unknown>
 }
 
 function json<T>(status: number, payload: ApiEnvelope<T>, headers: HeadersInit = {}) {
@@ -65,7 +79,10 @@ export function createApi(dependencies: ApiDependencies) {
     try {
       cors = corsHeaders(request, dependencies.allowedOrigins)
       if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors })
-      if (new URL(request.url).pathname !== '/v1/system/probe' || request.method !== 'POST') {
+      const path = new URL(request.url).pathname
+      const route = dependencies.routes?.[path]
+      const isProbe = path === '/v1/system/probe'
+      if ((!isProbe && !route) || request.method !== 'POST') {
         throw new ApiError(404, 'NOT_FOUND', 'Endpoint not found')
       }
 
@@ -75,7 +92,7 @@ export function createApi(dependencies: ApiDependencies) {
       if (rawBody.length > 16_384) throw new ApiError(400, 'INVALID_REQUEST', 'Request is too large')
       let body: unknown
       try { body = JSON.parse(rawBody || '{}') } catch { throw new ApiError(400, 'INVALID_REQUEST', 'Request validation failed') }
-      const parsed = probeSchema.safeParse(body)
+      const parsed = (isProbe ? probeSchema : route!.schema).safeParse(body)
       if (!parsed.success) throw new ApiError(400, 'INVALID_REQUEST', 'Request validation failed')
 
       const appCheckToken = request.headers.get('x-firebase-appcheck')
@@ -88,7 +105,8 @@ export function createApi(dependencies: ApiDependencies) {
         throw new ApiError(401, 'AUTHENTICATION_REQUIRED', 'Authentication is required')
       }
 
-      if (!await dependencies.rateLimiter.consume(`system.probe:${principal.userId}`, 20, 60)) {
+      const operation = isProbe ? 'system.probe' : route!.operation
+      if (!await dependencies.rateLimiter.consume(`${operation}:${principal.userId}`, route?.rateLimit ?? 20, 60)) {
         throw new ApiError(429, 'RATE_LIMITED', 'Too many requests')
       }
       const idempotencyKey = request.headers.get('x-idempotency-key') ?? ''
@@ -96,10 +114,13 @@ export function createApi(dependencies: ApiDependencies) {
 
       const execution = await executeIdempotently(dependencies.idempotencyStore, {
         key: idempotencyKey,
-        operation: 'system.probe',
+        operation,
         fingerprint: fingerprint(rawBody),
         actorUserId: principal.userId,
       }, async () => {
+        if (!isProbe) {
+          return route!.handle({ principal, correlationId: correlation, idempotencyKey, request }, parsed.data)
+        }
         const processedAt = now().toISOString()
         const event: OutboxEvent = {
           id: randomUUID(), type: 'system.probe.received', version: 1, organizationId: null,
@@ -111,8 +132,12 @@ export function createApi(dependencies: ApiDependencies) {
         return { status: 'ok', processedAt, replayed: false }
       })
 
-      const result: SystemProbeResult = { ...execution.result, replayed: execution.replayed }
-      dependencies.logger.info('api.system_probe.completed', correlation, { actorUserId: principal.userId, replayed: execution.replayed })
+      const result = isProbe
+        ? { ...(execution.result as SystemProbeResult), replayed: execution.replayed }
+        : execution.result
+      dependencies.logger.info(isProbe ? 'api.system_probe.completed' : 'api.request.completed', correlation, {
+        actorUserId: principal.userId, operation, replayed: execution.replayed,
+      })
       return json(200, { data: result, meta: { correlationId: correlation, apiVersion: API_VERSION } }, cors)
     } catch (error) {
       const apiError = error instanceof IdempotencyConflictError

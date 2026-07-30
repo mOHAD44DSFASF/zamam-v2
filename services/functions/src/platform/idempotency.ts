@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto'
-import type { SystemProbeResult } from '@zamam/contracts'
 import type { IdempotencyStore } from './ports.js'
 
 export class IdempotencyConflictError extends Error {
@@ -10,18 +9,18 @@ export function fingerprint(payload: string) {
   return createHash('sha256').update(payload).digest('hex')
 }
 
-export async function executeIdempotently(
+export async function executeIdempotently<TResult>(
   store: IdempotencyStore,
   input: { key: string; operation: string; fingerprint: string; actorUserId: string },
-  operation: () => Promise<SystemProbeResult>,
-): Promise<{ result: SystemProbeResult; replayed: boolean }> {
+  operation: () => Promise<TResult>,
+): Promise<{ result: TResult; replayed: boolean }> {
   const existing = await store.get(input.key)
   if (existing) {
     if (existing.operation !== input.operation || existing.fingerprint !== input.fingerprint || existing.actorUserId !== input.actorUserId) {
       throw new IdempotencyConflictError()
     }
     if (!existing.result) throw new IdempotencyConflictError()
-    return { result: existing.result, replayed: true }
+    return { result: existing.result as TResult, replayed: true }
   }
 
   const created = await store.create(input.key, input)

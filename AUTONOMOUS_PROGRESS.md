@@ -2,8 +2,8 @@
 
 ## Current checkpoint
 
-- Prompt 10 Project management: **Complete**. Audited lifecycle, scoped membership, explicit client publication, isolated financial data, bounded queries, and 10 focused tests.
-- Prompt 11 Workspace redesign: **In progress**. Tenant context, scoped workspace membership, legacy mapping, API composition, and Gate P11.
+- Prompt 11 Workspace redesign: **Complete / Gate PASS**. Explicit membership entities, validated tenant context, trusted API route registry, deterministic V1 inventory/quarantine, 13 focused tests and 5 emulator rules tests.
+- Prompt 12 Task management core: **In progress**. Typed task/subtask/checklist/assignment commands, state/concurrency guards, and trusted API/UI flows.
 
 آخر تحديث: 2026-07-30
 

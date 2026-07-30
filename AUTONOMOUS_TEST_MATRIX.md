@@ -1,6 +1,6 @@
 # Autonomous Test Matrix
 
-Latest additions: P10 project service/domain 7 passed; P10 RTL UI/accessibility 3 passed.
+Latest additions: P11 workspace service/migration 9 passed; tenant context 2 passed; RTL UI/accessibility 2 passed; API route registry 1 passed; Firestore rules emulator 5 passed.
 
 | Prompt | المستوى | النطاق | الحالة |
 |---:|---|---|---|

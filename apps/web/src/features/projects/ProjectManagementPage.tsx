@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { AlertTriangle, CalendarDays, Eye, EyeOff, FolderKanban, LoaderCircle, Plus, RefreshCw, Search, Users, X } from 'lucide-react'
 import { useAuth } from '../../auth/auth-context'
+import { useTenant } from '../../tenant/tenant-context'
 import { projectManagementClient, type ProjectManagementClient, type ProjectManagementSnapshot } from './client'
 
 function CreateProjectDialog({ snapshot, onClose, onSubmit }: {
@@ -105,8 +106,8 @@ export function ProjectManagementScreen({ organizationId, client }: { organizati
 }
 
 export function ProjectManagementPage() {
-  const { session } = useAuth()
-  const organizationId = session?.memberships[0]?.organizationId
+  useAuth()
+  const { organizationId } = useTenant()
   if (!organizationId) return <main dir="rtl" className="min-h-screen grid place-items-center">لا توجد عضوية مؤسسة نشطة.</main>
   return <ProjectManagementScreen organizationId={organizationId} client={projectManagementClient} />
 }

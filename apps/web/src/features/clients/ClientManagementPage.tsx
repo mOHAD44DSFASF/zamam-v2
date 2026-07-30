@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { AlertTriangle, Building, LoaderCircle, Plus, RefreshCw, Search, UserRound, X } from 'lucide-react'
 import { useAuth } from '../../auth/auth-context'
+import { useTenant } from '../../tenant/tenant-context'
 import {
   clientManagementClient,
   type ClientManagementClient,
@@ -125,8 +126,8 @@ export function ClientManagementScreen({ organizationId, client }: { organizatio
 }
 
 export function ClientManagementPage() {
-  const { session } = useAuth()
-  const organizationId = session?.memberships[0]?.organizationId
+  useAuth()
+  const { organizationId } = useTenant()
   if (!organizationId) return <main dir="rtl" className="min-h-screen grid place-items-center">لا توجد عضوية مؤسسة نشطة.</main>
   return <ClientManagementScreen organizationId={organizationId} client={clientManagementClient} />
 }

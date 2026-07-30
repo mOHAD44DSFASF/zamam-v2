@@ -25,7 +25,8 @@ export interface ClientContact extends TenantEntity { clientId: string; name: st
 export interface Project extends TenantEntity, ArchiveFields { clientId: string; name: string; code: string; status: ProjectStatus; departmentId?: string; managerUserId: string; startsOn?: string; dueOn?: string; clientVisible: boolean }
 export interface ProjectMember extends TenantEntity { projectId: string; userId: string; contactId?: string; principalType: 'member' | 'client'; access: 'viewer' | 'contributor' | 'manager'; status: 'active' | 'ended' }
 export interface ProjectFinancials extends TenantEntity { projectId: string; currency: string; budgetMinor: number; billingModel: 'fixed' | 'hourly' | 'retainer' | 'non_billable'; status: 'draft' | 'approved' | 'locked' }
-export interface Workspace extends TenantEntity, ArchiveFields { projectId?: string; name: string; status: WorkspaceStatus; visibility: 'private' | 'team' | 'project' }
+export interface Workspace extends TenantEntity, ArchiveFields { projectId?: string; departmentId?: string; ownerTeamId?: string; name: string; status: WorkspaceStatus; visibility: 'private' | 'team' | 'project'; createdBy: string }
+export interface WorkspaceMember extends TenantEntity { workspaceId: string; userId: string; membershipRole: 'manager' | 'supervisor' | 'member' | 'viewer'; source: 'explicit' | 'project'; status: 'active' | 'ended'; joinedAt: UtcIsoString; endedAt?: UtcIsoString }
 
 export interface Task extends TenantEntity, ArchiveFields { projectId: string; workspaceId?: string; parentTaskId?: string; title: string; description: string; status: TaskStatus; priority: 'low' | 'medium' | 'high' | 'urgent'; assigneeUserId?: string; workflowInstanceId?: string; dueAt?: UtcIsoString; completedAt?: UtcIsoString; clientVisible: boolean }
 export interface Subtask extends TenantEntity { taskId: string; title: string; status: TaskStatus; assigneeUserId?: string; completedAt?: UtcIsoString }
@@ -79,7 +80,7 @@ export interface CustomFieldValue extends TenantEntity { definitionId: string; r
 export const ENTITY_DESCRIPTORS = [
   'organization', 'organization_settings', 'department', 'team', 'user_profile', 'organization_membership', 'invitation', 'employment_profile',
   'role', 'permission_definition', 'role_assignment', 'team_membership', 'client', 'client_contact', 'project',
-  'project_member', 'project_financials', 'workspace', 'task', 'subtask', 'checklist', 'checklist_item', 'task_assignment', 'task_watcher',
+  'project_member', 'project_financials', 'workspace', 'workspace_member', 'task', 'subtask', 'checklist', 'checklist_item', 'task_assignment', 'task_watcher',
   'tag', 'workflow_template', 'workflow_version', 'workflow_stage', 'workflow_transition', 'task_workflow_instance',
   'task_stage_execution', 'review_request', 'approval', 'change_request', 'comment', 'mention', 'reaction', 'attachment',
   'file_version', 'notification', 'notification_preference', 'time_entry', 'timesheet', 'work_schedule', 'attendance_record',
