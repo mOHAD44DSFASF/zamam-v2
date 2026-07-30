@@ -12,6 +12,7 @@ node_modules
 .firebase
 dist
 *.local
+*.tsbuildinfo
 .env
 .env.*
 !.env.example

@@ -5,8 +5,9 @@
 | Prompt | الحالة | الدليل |
 |---:|---|---|
 | Baseline | Complete | أرشيف محلي موثّق بالـ SHA-256؛ build ناجح؛ lint V1 به 52 مخالفة؛ لا tests في V1 |
-| P2 Repository restructuring | In progress | npm workspaces، نقل web، strict package boundaries، structural tests؛ الفحوص خضراء |
-| P3-P28 | Pending | تُنفذ بالتسلسل بعد checkpoint P2 |
+| P2 Repository restructuring | Complete | checkpoint `218878d`؛ npm workspaces، web boundary، 10 tests؛ جميع الفحوص خضراء |
+| P3 Authentication foundation | In progress | session boundary وinvitation/reset/emulator tests قيد التنفيذ |
+| P4-P28 | Pending | تُنفذ بالتسلسل بعد P3 |
 
 ## Baseline recovery
 
