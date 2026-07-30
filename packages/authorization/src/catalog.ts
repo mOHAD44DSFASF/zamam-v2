@@ -26,6 +26,7 @@ export const PERMISSIONS = [
   'comment.moderate', 'mention.create', 'reaction.create', 'reaction.delete',
   'task.watch', 'task.watcher.manage', 'activity.view',
   'file.view', 'file.upload', 'file.download', 'file.version', 'file.delete', 'file.restore',
+  'file.scan', 'file.purge', 'file.retention.manage',
   'file.internal.view', 'file.client.share', 'tag.view', 'tag.manage',
   'saved_view.create', 'saved_view.share', 'saved_view.manage', 'custom_field.view', 'custom_field.manage',
   'time.track', 'time.view_self', 'time.view_team', 'time.adjust',

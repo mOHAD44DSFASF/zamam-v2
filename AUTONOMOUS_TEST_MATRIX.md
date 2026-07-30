@@ -1,6 +1,6 @@
 # Autonomous Test Matrix
 
-Latest additions: P18 collaboration service/security 10 passed; RTL collaboration accessibility and channel actions 3 passed. Full suite 299/299.
+Latest additions: P19 secure file lifecycle 9 passed; workers 3; R2 SigV4 contract 4; RTL file library 3. Full suite 318/318.
 
 | Prompt | المستوى | النطاق | الحالة |
 |---:|---|---|---|
@@ -47,5 +47,10 @@ Latest additions: P18 collaboration service/security 10 passed; RTL collaboratio
 | P17 Gate | full quality | typecheck، lint، 286 tests، build، bundle، 5 emulator rules | PASS |
 | P18 | domain/service/security | normalization، client leakage، mentions، edit lock/window، tombstone، reactions/watchers، bounded queries | 10 pass focused |
 | P18 | RTL UI/accessibility | channel selection، explicit mentions، portal channel absence، axe | 3 pass focused |
+| P19 | domain/service/security | type/size/checksum/key، prepare/finalize، clean-only download، quarantine، versions، retention/purge | 9 pass |
+| P19 | background processing | scanner configuration/evidence، retry-compatible purge handoff | 3 pass |
+| P19 | provider contract | deterministic R2 SigV4 PUT/GET/HEAD/DELETE، expiry، no network | 4 pass |
+| P19 | RTL UI/accessibility | library/upload، integration-not-configured fail-closed، axe | 3 pass |
+| P19 | full quality | typecheck، lint، 318 tests، production build، bundle budget | PASS |
 
 يُوسّع الجدول عند بدء كل Prompt، ولا يُعتبر Prompt مكتملاً دون evidence قابل للتكرار.

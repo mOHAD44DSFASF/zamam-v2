@@ -95,6 +95,7 @@
 | `task.watch` / `task.watcher.manage` | self follow أو إدارة المتابعين ضمن scope |
 | `activity.view` | عرض operational activity المخفض؛ لا يمنح raw audit للعميل |
 | `file.view/upload/download/version/delete/restore` | file lifecycle |
+| `file.scan/purge/retention.manage` | service scan، purge saga، وlegal hold؛ privileged/backend only |
 | `file.internal.view` | internal-only files |
 | `file.client.share` | نشر file للعميل |
 | `tag.view/manage` | tags |
