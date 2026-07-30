@@ -5,10 +5,11 @@ import {
 } from '@zamam/domain'
 import type { AtomicStore, AtomicTransaction, StoredDocument } from '@zamam/firestore'
 import {
-  NotificationCommandService, NotificationProjectionService,
+  NotificationCommandService,
   buildDueNotificationDeliveryQuery, buildNotificationInboxQuery,
   type NotificationAuthorizationGate, type NotificationMetadata,
 } from '../services/functions/src'
+import { NotificationProjectionService } from '../services/workers/src/notification-projection'
 
 class MemoryStore implements AtomicStore {
   records = new Map<string, StoredDocument>()

@@ -9,6 +9,7 @@ export default defineConfig({
       '@zamam/domain': fileURLToPath(new URL('./packages/domain/src/index.ts', import.meta.url)),
       '@zamam/firestore': fileURLToPath(new URL('./packages/firestore/src/index.ts', import.meta.url)),
       '@zamam/observability': fileURLToPath(new URL('./packages/observability/src/index.ts', import.meta.url)),
+      '@zamam/workers': fileURLToPath(new URL('./services/workers/src/index.ts', import.meta.url)),
     },
   },
   test: {
