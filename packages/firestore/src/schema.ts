@@ -11,7 +11,13 @@ const tenantBaseSchema = z.object({
   deletedAt: z.instanceof(Timestamp).optional(),
 }).passthrough()
 
-function decodeValue(value: unknown, key = ''): unknown {
+/**
+ * Recursively converts every Firestore `Timestamp` in a value (at any depth/field name) to a canonical
+ * UTC ISO string. Exported so every raw-read path in this package (admin-store.ts's transaction reads,
+ * query-store.ts's query results) decodes exactly the same way as the typed converter below — a
+ * document read through any of them must never hand a caller a raw `Timestamp` instance.
+ */
+export function decodeValue(value: unknown, key = ''): unknown {
   if (value instanceof Timestamp) return asUtcIsoString(value.toDate().toISOString())
   if (value instanceof Date) throw new Error(`NON_CANONICAL_DATE:${key}`)
   if (Array.isArray(value)) return value.map((item) => decodeValue(item, key))

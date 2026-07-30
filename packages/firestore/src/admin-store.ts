@@ -1,5 +1,6 @@
 import { FieldValue, type Firestore, type Transaction } from 'firebase-admin/firestore'
 import type { AtomicStore, AtomicTransaction, StoredDocument } from './repository.js'
+import { decodeValue } from './schema.js'
 
 function materialize(value: unknown): unknown {
   if (value && typeof value === 'object' && '__serverTimestamp' in value && value.__serverTimestamp === true) {
@@ -16,7 +17,9 @@ class FirebaseTransactionAdapter implements AtomicTransaction {
   constructor(private readonly firestore: Firestore, private readonly transaction: Transaction) {}
   async get(path: string) {
     const snapshot = await this.transaction.get(this.firestore.doc(path))
-    return snapshot.exists ? snapshot.data() as StoredDocument : null
+    // decodeValue converts raw Firestore Timestamp fields to ISO strings — every caller of AtomicStore
+    // already assumes that contract (it's what decodeTenantDocument and every in-memory test fake give).
+    return snapshot.exists ? decodeValue(snapshot.data()) as StoredDocument : null
   }
   create(path: string, data: StoredDocument) {
     this.transaction.create(this.firestore.doc(path), materialize(data) as FirebaseFirestore.DocumentData)

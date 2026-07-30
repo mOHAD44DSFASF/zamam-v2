@@ -91,17 +91,21 @@ idempotency store in `api.ts`. "N/A (read)" means the endpoint is a query with n
 | `/v1/auth/password-reset` | queue password-reset request | `handlers/auth.ts` | none (public route, App Check only) | n/a | `{email}` (route-level, public schema) | N/A (queues a `_passwordResetRequests` record; no idempotency key required by this public route) | — (not a tenant command; no audit trail by design — no authenticated actor) | Real email delivery is NOT_CONFIGURED (worker/email adapter is BLK-002 territory); this handler only queues the hashed request | none yet — flagged below |
 | `/v1/auth/invitations/accept` | `EmployeeService.acceptInvitation` | `handlers/auth.ts` | none (public route; authenticated by token possession, verified via constant-time SHA-256 hash comparison — same convention as `Invitation.emailHash`) | resolved dynamically from the token (`InvitationLookupPort.findByTokenHash`, a collectionGroup lookup) | `acceptInvitationSchema` (`employee/service.ts`) + route-level public schema | AuditCommandService (context built after the token resolves an organization/actor) | `user.activated` | — | `employee-management.test.ts` (`invitation acceptance` — valid accept, expired, already-used, invalid/unknown token, tampered hash, wrong-user isolation) |
 
+## Fixed since the previous revision of this document
+
+- **`FirebaseAtomicStore.get()` and `FirestorePageQueryStore.list()` now decode Firestore `Timestamp`
+  values to ISO strings** (`packages/firestore/src/schema.ts`'s `decodeValue`, now exported and reused by
+  both). Previously a raw transaction/query read returned live `Timestamp` instances for any
+  `SERVER_TIMESTAMP`-written field, so `Date.parse(String(...))` on those fields (SLA due-dates in
+  `WorkflowExecutionService`, retention/purge dates in `FileService`, comment edit windows in
+  `CollaborationService`) produced `NaN` against a real Firestore backend — invisible to every existing
+  unit test because their in-memory `AtomicStore` fakes never produced a real `Timestamp`. Regression
+  coverage: `tests/firestore-timestamp-decoding.test.ts`.
+- **`/v1/auth/invitations/accept` is implemented** — see the endpoint table row above.
+
 ## Known gaps carried forward (not silently papered over)
 
-1. **`FirebaseAtomicStore` (`packages/firestore/src/admin-store.ts`) does not decode Firestore `Timestamp`
-   values back to ISO strings on read** (unlike `decodeTenantDocument`). Any code path that does
-   `Date.parse(String(...))` on a field read through a real transaction (SLA due-dates in
-   `WorkflowExecutionService`, retention/purge dates in `FileService`, comment edit windows in
-   `CollaborationService`) will behave incorrectly against a real Firestore backend, even though every
-   existing unit test passes (they all use in-memory `AtomicStore` fakes that never produce a real
-   `Timestamp`). This predates this change and is outside BLK-001/BLK-002 scope; it needs its own fix and
-   regression pass before staging.
-2. Several v1 simplifications are called out inline above and in code comments where a Port
+1. Several v1 simplifications are called out inline above and in code comments where a Port
    implementation had to make a judgment call in the absence of an existing domain rule (workflow
    business-calendar minutes, workload absence-minute conversion, leave approval chain, review workflow
    gate, KPI export field allowlist). None of these change any *existing*, tested business rule — they are

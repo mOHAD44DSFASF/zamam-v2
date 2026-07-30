@@ -1,5 +1,6 @@
 import type { Firestore, Query } from 'firebase-admin/firestore'
 import type { PageQuery, PageResult, QueryStore, StoredDocument } from './repository.js'
+import { decodeValue } from './schema.js'
 
 function applyFilters(query: Query, filters: PageQuery['filters']) {
   let next = query
@@ -27,7 +28,9 @@ export class FirestorePageQueryStore implements QueryStore {
     if (query.cursor?.length) built = built.startAfter(...query.cursor)
     built = built.limit(query.limit)
     const snapshot = await built.get()
-    const items = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as unknown as T))
+    // Same Timestamp-decoding contract as FirebaseAtomicStore.get() — a query result must never hand a
+    // caller a raw Firestore Timestamp for a field the rest of the codebase treats as an ISO string.
+    const items = snapshot.docs.map((doc) => ({ id: doc.id, ...decodeValue(doc.data()) as StoredDocument } as unknown as T))
     const last = snapshot.docs.at(-1)
     const nextCursor = last && snapshot.size === query.limit
       ? encodeCursor(query.orderBy.map((clause) => (last.data() as StoredDocument)[clause.field]))
