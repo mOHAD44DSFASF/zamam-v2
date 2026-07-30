@@ -8,6 +8,10 @@
     "packages/*",
     "services/*"
   ],
+  "overrides": {
+    "brace-expansion": "5.0.8",
+    "uuid": "11.1.1"
+  },
   "scripts": {
     "dev": "npm run dev --workspace @zamam/web",
     "build": "npm run build --workspaces --if-present",

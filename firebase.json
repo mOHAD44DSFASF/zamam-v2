@@ -19,5 +19,13 @@
     "functions": { "port": 5001 },
     "ui": { "enabled": true, "port": 4000 },
     "singleProjectMode": true
-  }
+  },
+  "functions": [
+    {
+      "source": "services/functions",
+      "codebase": "default",
+      "runtime": "nodejs22",
+      "ignore": ["node_modules", "*.local", ".env*"]
+    }
+  ]
 }

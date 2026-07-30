@@ -13,3 +13,4 @@
 | `RISK-003` | لا credentials أو emulators مهيأة بعد | local-only config وdisabled adapters | إعداد emulator suite في P3/P4 |
 | `RISK-004` | مراجعة قانونية إقليمية غير مكتملة | privacy interfaces وافتراضات محافظة | blocker للإطلاق فقط قبل P28 |
 | `RISK-005` | Java غير مثبت، لذلك Firestore emulator لا يعمل | unit/DOM fixtures الآن؛ لا production fallback | توفير JRE محلي قبل Gate P6 |
+| `RISK-006` | بعد إضافة Firebase Admin/Functions: `npm audit` يعرض إجمالاً 14 نتيجة (7 High، 7 Moderate)، منها Google SDK transitive | أحدث الإصدارات المباشرة مستخدمة؛ لا `--force` downgrade؛ endpoint غير منشور | تحديث upstream أو mitigation مثبت قبل Gate P28؛ blocker للإطلاق إن بقي High runtime |

@@ -1,1 +1,1 @@
-{"name":"@zamam/contracts","private":true,"version":"0.1.0","type":"module","exports":"./src/index.ts","scripts":{"typecheck":"tsc -p tsconfig.json"}}
+{"name":"@zamam/contracts","private":true,"version":"0.1.0","type":"module","exports":{".":{"types":"./src/index.ts","default":"./dist/index.js"}},"scripts":{"typecheck":"tsc -p tsconfig.json","build":"tsc -p tsconfig.build.json"}}
