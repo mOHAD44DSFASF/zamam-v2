@@ -4,7 +4,6 @@
 
 | ID | النوع | الدليل | شرط الإغلاق |
 |---|---|---|---|
-| `BLK-001` | Runtime composition | `services/functions/src/api/firebase-adapter.ts` يركب `DisabledFeatureCommandDispatcher`؛ كل feature route ترجع `503` بأمان | تركيب واختبار handlers فعلية لكل `FEATURE_API_PATHS` |
 | `BLK-002` | Worker transport | `services/workers/src/http.ts` يعيد `WORKER_TRANSPORT_NOT_CONFIGURED` لمسار الأحداث | تركيب authenticated queue/event transport وpersistent delivery store |
 | `BLK-003` | External launch | لا legal/privacy/data-residency sign-off ولا `Launch Authority` GO | اعتماد الجهات المسؤولة بعد staging evidence |
 | `BLK-004` | External assurance | لا independent penetration ولا production-like load/restore/chaos | تنفيذ الاختبارات في staging معزولة واعتماد نتائجها |
@@ -25,3 +24,4 @@
 |---|---|
 | `RISK-003` | emulator config وlocal-only adapters موجودة؛ لا credentials مطلوبة للاختبارات |
 | `RISK-005` | JRE 21 محلي معزول؛ `npm run test:emulator` اجتاز 4/4 بعد clean install |
+| `BLK-001` | `services/functions/src/api/firebase-adapter.ts` يركب الآن `composeFeatureCommandDispatcher` حقيقي (Firestore-backed AtomicStore/QueryStore/PolicyStore/IdentityResolver) لكل `FEATURE_API_PATHS`؛ 408/408 tests PASS بما فيها `tests/dispatcher-composition.test.ts`؛ التفاصيل والاستثناء الوحيد (`/v1/auth/invitations/accept`، لا منطق موجود بعد) في `docs/v2/P28A_ENDPOINT_COMMAND_MAP.md` |

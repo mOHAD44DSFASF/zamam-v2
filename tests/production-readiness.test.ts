@@ -17,9 +17,14 @@ describe('production readiness invariants',()=>{
       env:{...process.env,ZAMAM_LAUNCH_AUTHORITY_APPROVED:'false',ZAMAM_STAGING_ASSURANCE_ID:''},
     })
     expect(result.status).toBe(1)
-    expect(result.stderr).toContain('FEATURE_COMMAND_DISPATCHER_NOT_COMPOSED')
+    expect(result.stderr).not.toContain('FEATURE_COMMAND_DISPATCHER_NOT_COMPOSED')
     expect(result.stderr).toContain('WORKER_TRANSPORT_NOT_COMPOSED')
     expect(result.stderr).toContain('LAUNCH_AUTHORITY_NOT_APPROVED')
+  })
+  it('composes a real feature command dispatcher instead of the disabled default',()=>{
+    const adapter=readFileSync(join(root,'services/functions/src/api/firebase-adapter.ts'),'utf8')
+    expect(adapter).not.toContain('DisabledFeatureCommandDispatcher')
+    expect(adapter).toContain('composeFeatureCommandDispatcher')
   })
   it('rehearses tenant-scoped backup integrity and rejects corruption',()=>{const bundle=createTenantBackup('org-1',[{path:'v2Organizations/org-1/task/task-1',organizationId:'org-1',data:{organizationId:'org-1',title:'Task'}}]);expect(validateTenantRestore(bundle)).toHaveLength(1);expect(()=>validateTenantRestore({...bundle,payload:`${bundle.payload}x`})).toThrow('BACKUP_CHECKSUM_MISMATCH')})
 })
