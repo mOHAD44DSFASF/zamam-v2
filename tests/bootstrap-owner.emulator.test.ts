@@ -39,13 +39,22 @@ describe('BootstrapOwnerService against a real Firestore transaction', () => {
     const first = await service.bootstrap(input)
     expect(first.actions).toEqual({
       organizationCreated: true, departmentCreated: true, membershipCreated: true,
-      employmentCreated: true, roleCreated: true, roleAssignmentCreated: true, passwordSet: true,
+      employmentCreated: true, roleCreated: true, roleAssignmentCreated: true,
+      sessionViewCreated: true, passwordSet: true,
+    })
+
+    // This is exactly what apps/web/src/auth/session-reader.ts reads to gate ProtectedRoute.
+    const sessionView = await firestore.doc('sessionViews/owner-emulator-1').get()
+    expect(sessionView.data()).toEqual({
+      userId: 'owner-emulator-1', displayName: 'Emulator Owner', email: 'owner@emulator.local',
+      accountStatus: 'active', memberships: [{ organizationId: 'org-emulator-1', status: 'active' }],
     })
 
     const second = await service.bootstrap(input)
     expect(second.actions).toEqual({
       organizationCreated: false, departmentCreated: false, membershipCreated: false,
-      employmentCreated: false, roleCreated: false, roleAssignmentCreated: false, passwordSet: true,
+      employmentCreated: false, roleCreated: false, roleAssignmentCreated: false,
+      sessionViewCreated: false, passwordSet: true,
     })
   })
 })

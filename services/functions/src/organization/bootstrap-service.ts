@@ -37,6 +37,7 @@ export interface BootstrapOwnerActions {
   employmentCreated: boolean
   roleCreated: boolean
   roleAssignmentCreated: boolean
+  sessionViewCreated: boolean
   passwordSet: boolean
 }
 
@@ -92,8 +93,8 @@ export class BootstrapOwnerService {
     const startDate = this.now().toISOString().slice(0, 10)
 
     const actions = await this.store.runTransaction(async (transaction) => {
-      // Firestore transactions require every read to happen before any write, so all six existence
-      // checks are resolved first (phase 1) and every transaction.create() call happens afterward
+      // Firestore transactions require every read to happen before any write, so every existence
+      // check is resolved first (phase 1) and every transaction.create() call happens afterward
       // (phase 2) — never interleaved per-entity.
       const organizationPath = tenantDocumentPath(input.organizationId, 'organization', input.organizationId)
       const departmentPath = tenantDocumentPath(input.organizationId, 'department', ROOT_DEPARTMENT_ID)
@@ -102,6 +103,12 @@ export class BootstrapOwnerService {
       const profilePath = tenantDocumentPath(input.organizationId, 'user_profile', identity.userId)
       const rolePath = tenantDocumentPath(input.organizationId, 'role', OWNER_ROLE_ID)
       const assignmentPath = tenantDocumentPath(input.organizationId, 'role_assignment', roleAssignmentId)
+      // sessionViews is a top-level (non-tenant) read model the web app's AuthProvider reads directly from
+      // Firestore to gate ProtectedRoute — see apps/web/src/auth/session-reader.ts. No production code
+      // currently maintains it for any user (there is no invite/accept/disable writer either — tracked as
+      // remaining P4/P5 work in docs/v2/AUTH_LIFECYCLE_AND_THREAT_MODEL.md); bootstrap must write its own
+      // entry directly or the owner it just created can never pass ProtectedRoute's account/membership check.
+      const sessionViewPath = `sessionViews/${identity.userId}`
 
       const existingOrganization = await transaction.get(organizationPath)
       const existingDepartment = await transaction.get(departmentPath)
@@ -110,10 +117,12 @@ export class BootstrapOwnerService {
       const existingProfile = await transaction.get(profilePath)
       const existingRole = await transaction.get(rolePath)
       const existingAssignment = await transaction.get(assignmentPath)
+      const existingSessionView = await transaction.get(sessionViewPath)
 
       const result: BootstrapOwnerActions = {
         organizationCreated: false, departmentCreated: false, membershipCreated: false,
-        employmentCreated: false, roleCreated: false, roleAssignmentCreated: false, passwordSet,
+        employmentCreated: false, roleCreated: false, roleAssignmentCreated: false,
+        sessionViewCreated: false, passwordSet,
       }
 
       if (!existingOrganization) {
@@ -169,6 +178,14 @@ export class BootstrapOwnerService {
           scopeType: 'organization', scopeId: input.organizationId, effect: 'grant', status: 'active',
         })
         result.roleAssignmentCreated = true
+      }
+
+      if (!existingSessionView) {
+        transaction.create(sessionViewPath, {
+          userId: identity.userId, displayName, email, accountStatus: 'active',
+          memberships: [{ organizationId: input.organizationId, status: 'active' }],
+        })
+        result.sessionViewCreated = true
       }
 
       return result
