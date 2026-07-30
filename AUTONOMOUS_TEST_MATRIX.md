@@ -1,6 +1,6 @@
 # Autonomous Test Matrix
 
-Latest additions: P17 template/recurrence domain and service 8 passed; RTL template UI accessibility/create 2 passed. Full suite 286/286 and emulator 5/5.
+Latest additions: P18 collaboration service/security 10 passed; RTL collaboration accessibility and channel actions 3 passed. Full suite 299/299.
 
 | Prompt | المستوى | النطاق | الحالة |
 |---:|---|---|---|
@@ -45,5 +45,7 @@ Latest additions: P17 template/recurrence domain and service 8 passed; RTL templ
 | P17 | template/recurrence | publish step-up، DST، catch-up bound، deterministic run، pause/resume/query | 8 pass |
 | P17 | RTL UI/accessibility | inventory، create command، permission states، axe | 2 pass |
 | P17 Gate | full quality | typecheck، lint، 286 tests، build، bundle، 5 emulator rules | PASS |
+| P18 | domain/service/security | normalization، client leakage، mentions، edit lock/window، tombstone، reactions/watchers، bounded queries | 10 pass focused |
+| P18 | RTL UI/accessibility | channel selection، explicit mentions، portal channel absence، axe | 3 pass focused |
 
 يُوسّع الجدول عند بدء كل Prompt، ولا يُعتبر Prompt مكتملاً دون evidence قابل للتكرار.

@@ -46,9 +46,9 @@ export interface ReviewRequest extends TenantEntity { taskId: string; stageExecu
 export interface Approval extends TenantEntity { reviewRequestId: string; round: number; reviewerUserId: string; order: number; reviewedVersion: number; status: ApprovalStatus; decidedAt?: UtcIsoString; decisionReason?: string; delegatedFromApprovalId?: string }
 export interface ChangeRequest extends TenantEntity { taskId: string; reviewRequestId: string; reviewRound: number; requestedBy: string; description: string; status: 'open' | 'resolved' | 'cancelled'; resolvedAt?: UtcIsoString }
 
-export interface Comment extends TenantEntity { resourceType: string; resourceId: string; authorUserId: string; body: string; visibility: 'internal' | 'client'; status: 'active' | 'deleted'; lockedAt?: UtcIsoString }
-export interface Mention extends TenantEntity { commentId: string; mentionedUserId: string; visibility: 'internal' | 'client' }
-export interface Reaction extends TenantEntity { commentId: string; userId: string; emoji: string }
+export interface Comment extends TenantEntity { resourceType: 'task' | 'project'; resourceId: string; authorUserId: string; body: string; visibility: 'internal' | 'client'; status: 'active' | 'deleted'; parentCommentId?: string; linkedReviewRequestId?: string; editableUntil: UtcIsoString; editedAt?: UtcIsoString; lockedAt?: UtcIsoString; deletedAt?: UtcIsoString }
+export interface Mention extends TenantEntity { commentId: string; mentionedUserId: string; visibility: 'internal' | 'client'; status: 'active' }
+export interface Reaction extends TenantEntity { commentId: string; userId: string; type: 'like' | 'celebrate' | 'support' | 'insightful'; status: 'active' | 'removed' }
 export interface Attachment extends TenantEntity { resourceType: string; resourceId: string; fileId: string; visibility: 'internal' | 'client' }
 export interface FileVersion extends TenantEntity { fileId: string; versionNumber: number; objectKey: string; sizeBytes: number; contentType: string; checksumSha256: string; status: FileStatus; uploadedBy: string }
 

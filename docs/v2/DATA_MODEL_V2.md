@@ -120,7 +120,7 @@ Global collections محدودة:
 
 | Path/entity | fields | indexes/queries | lifecycle/security/migration/risk |
 |---|---|---|---|
-| `comments/{id}` | `resourceType*,resourceId*,authorId*,body*,status*,visibility:e<internal,client>*,parentCommentId?,editedAt?` | resource+visibility+createdAt؛ author+createdAt | CMD; tombstone؛ AE delete/visibility؛ high growth |
+| `comments/{id}` | `resourceType*,resourceId*,authorUserId*,body*,status*,visibility:e<internal,client>*,parentCommentId?,linkedReviewRequestId?,editableUntil*,editedAt?,lockedAt?` | resource+status+visibility+createdAt؛ author+createdAt | CMD; 15m author edit؛ review-linked lock؛ tombstone only؛ visibility immutable؛ AE؛ high growth |
 | `mentions/{id}` | `commentId*,mentionedPrincipalId*,status*` | principal+status+createdAt; comment | JOB/CMD parser؛ retain with comment |
 | `reactions/{id}` | `commentId*,principalId*,type*,status*` | comment+status؛ unique reservation on triple | CMD؛ S؛ high but small |
 | `files/{fileId}` Attachment aggregate | `ownerType*,ownerId*,visibility*,status*,retentionState*,latestVersionId*,displayName*` | owner+status+createdAt; retentionState+date | CMD/JOB; no public URL; AE; from attachment URLs |

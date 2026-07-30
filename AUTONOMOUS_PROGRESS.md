@@ -9,7 +9,8 @@
 - Prompt 15 Workflow execution engine: **Complete**. Pinned instances, exactly-once guarded transitions, full stage history, rework cycles, SLA breach scan, compatible migrations, and task UI commands.
 - Prompt 16 Reviews and approvals: **Complete**. Version-pinned immutable evidence, single/any/all/ordered policies, stale rejection, changes/resubmit, delegation, expiry, client boundary, RTL inbox.
 - Prompt 17 Templates and recurring work: **Complete / Gate PASS**. Published task/project templates, timezone/DST recurrence, deterministic occurrence runs, bounded catch-up, pause/resume, RTL UI.
-- Prompt 18 Comments and collaboration: **In progress**. Internal/client visibility boundary, mentions, reactions, watchers, activity, edit/tombstone policy.
+- Prompt 18 Comments and collaboration: **Complete**. Trusted internal/client projections, 15-minute author edit, immutable review evidence, mentions, reactions, watchers, bounded activity, RTL collaboration screen.
+- Prompt 19 Secure file management: **In progress**. Private signed upload/finalize, scanning/quarantine, immutable versions, retention, secure download, and reconciliation.
 
 آخر تحديث: 2026-07-30
 
@@ -32,7 +33,8 @@
 | P15 Workflow execution | Complete | checkpoint `3a89014`؛ pinned versions، exactly-once transitions، stage history، SLA |
 | P16 Reviews/approvals | Complete | checkpoint `bc2f585`؛ immutable version evidence، policies/delegation/expiry، RTL inbox |
 | P17 Templates/recurrence | Complete / Gate PASS | 10 focused tests؛ DST، deterministic dedupe، pause/resume، bounded scheduler، RTL/axe؛ 286 suite + 5 emulator |
-| P18-P28 | Pending | التنفيذ متسلسل بعد Gate P17 |
+| P18 Collaboration | Complete | 13 focused tests؛ internal/client separation، edit lock/window، tombstone، mentions/reactions/watchers، RTL/axe؛ 299 suite |
+| P19-P28 | Pending | التنفيذ متسلسل بعد P18 |
 
 ## Baseline recovery
 
@@ -41,9 +43,9 @@
 ## أحدث فحوص
 
 - `npm.cmd ci --ignore-scripts`: Passed؛ lockfile قابل لإعادة الإنتاج.
-- `npm.cmd run check`: Passed في P17: typecheck + lint + 31 test files + build + bundle.
-- `npm.cmd test`: 286/286 passed، ولا يوجد skipped critical test.
+- `npm.cmd run check`: Passed في P18: typecheck + lint + 33 test files + build + bundle.
+- `npm.cmd test`: 299/299 passed، ولا يوجد skipped critical test.
 - `npm.cmd run test:emulator`: 5/5 Firestore rules tests passed على JRE محلي معزول.
-- `npm.cmd run build && npm.cmd run check:bundle`: Passed؛ entry = 11.84 KB، أكبر vendor chunk = 345.83 KB.
+- `npm.cmd run build && npm.cmd run check:bundle`: Passed؛ entry = 12.17 KB، أكبر vendor chunk = 345.83 KB.
 - `npm.cmd audit --omit=dev`: لا Critical؛ 2 High و6 Moderate معروفة ومقيدة في المخاطر.
 - secret-pattern scan لنطاق التطبيق والوثائق: صفر نتيجة.
