@@ -22,5 +22,7 @@
 | P6 | accessibility | login/reset/invitation axe checks | 3 pass |
 | P6 | clean-install gate | `npm ci` ثم typecheck/lint/unit/build/bundle/emulator | pass؛ 160 unit/integration + 4 rules |
 | P6 | performance budget | bounded query limit + web JS/image artifact budgets | pass؛ entry 8.2 KB، max JS 345.8 KB |
+| P7 | domain/service | organization settings/suspend، department/team uniqueness/archive، membership allocation/idempotency | 8 pass |
+| P7 | RTL UI/accessibility | hierarchy، capability feedback، empty state، create command flow، axe | 3 pass |
 
 يُوسّع الجدول عند بدء كل Prompt، ولا يُعتبر Prompt مكتملاً دون evidence قابل للتكرار.

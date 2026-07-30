@@ -10,8 +10,9 @@
 | P4 Trusted backend foundation | Complete | Functions adapter، transport-neutral API، idempotency/outbox ports، worker retry/dead-letter، runtime import smoke |
 | P5 Permission and authorization | Complete | 162-permission catalog، scoped engine، default/custom roles، anti-escalation، recursive client-write deny |
 | P6 V2 schema/converters/audit | Complete | Gate P6 PASS؛ 60 tenant entity kinds، 160 tests، 4 emulator rules tests، clean install، backup/restore/rollback |
-| P7 Organization/departments/teams | In progress | lifecycle services، hierarchy، membership، scoped UI |
-| P8-P28 | Pending | تُنفذ بالتسلسل بعد P7 |
+| P7 Organization/departments/teams | Complete | backend-only audited lifecycle، atomic hierarchy counters، multi-team allocation، RTL admin UI، 11 focused tests |
+| P8 Employee management | In progress | invite/profile/employment/disable/departure/schedules |
+| P9-P28 | Pending | تُنفذ بالتسلسل بعد P8 |
 
 ## Baseline recovery
 

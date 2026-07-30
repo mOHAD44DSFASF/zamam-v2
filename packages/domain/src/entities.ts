@@ -8,7 +8,7 @@ import type {
 export interface Organization extends TenantEntity, ArchiveFields { name: string; slug: string; status: 'active' | 'suspended' | 'archived' }
 export interface OrganizationSettings extends TenantEntity { timezone: string; locale: 'ar' | 'en'; weekStartsOn: 0 | 1 | 6; retentionPolicyId: string }
 export interface Department extends TenantEntity, ArchiveFields { name: string; code: string; managerUserId?: string; status: 'active' | 'archived' }
-export interface Team extends TenantEntity, ArchiveFields { name: string; departmentId: string; leaderUserId?: string; status: 'active' | 'archived' }
+export interface Team extends TenantEntity, ArchiveFields { name: string; code: string; departmentId: string; leaderUserId?: string; status: 'active' | 'archived' }
 
 export interface UserIdentity extends GlobalEntity { email: string; accountStatus: UserAccountStatus; tokensValidAfter: UtcIsoString }
 export interface UserProfile extends TenantEntity { userId: string; displayName: string; firstName: string; locale: 'ar' | 'en'; timezone: string; avatarFileId?: string }
@@ -16,7 +16,7 @@ export interface EmploymentProfile extends TenantEntity, ArchiveFields { userId:
 export interface Role extends TenantEntity, ArchiveFields { name: string; permissions: readonly string[]; policyVersion: number; status: 'active' | 'archived' }
 export interface PermissionDefinition extends TenantEntity { key: string; description: string; sensitivity: 'low' | 'medium' | 'high' | 'critical' }
 export interface RoleAssignment extends TenantEntity { userId: string; roleId: string; scopeType: string; scopeId: string; effect: 'grant' | 'deny'; status: 'active' | 'revoked'; startsAt?: UtcIsoString; expiresAt?: UtcIsoString }
-export interface TeamMembership extends TenantEntity { teamId: string; userId: string; membershipRole: 'leader' | 'member'; allocationPercent?: number; status: 'active' | 'ended' }
+export interface TeamMembership extends TenantEntity { teamId: string; userId: string; membershipRole: 'leader' | 'member'; isPrimary: boolean; allocationPercent?: number; status: 'active' | 'ended' }
 
 export interface Client extends TenantEntity, ArchiveFields { name: string; code: string; status: ClientStatus; accountManagerUserId?: string }
 export interface ClientContact extends TenantEntity { clientId: string; name: string; email: string; portalStatus: 'none' | 'invited' | 'active' | 'disabled'; userId?: string }
