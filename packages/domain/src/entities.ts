@@ -37,9 +37,9 @@ export interface TaskWatcher extends TenantEntity { taskId: string; userId: stri
 export interface Tag extends TenantEntity, ArchiveFields { name: string; color: string }
 
 export interface WorkflowTemplate extends TenantEntity, ArchiveFields { name: string; status: 'draft' | 'published' | 'archived'; latestVersionId?: string }
-export interface WorkflowVersion extends TenantEntity { templateId: string; versionNumber: number; status: 'draft' | 'published' | 'archived'; publishedAt?: UtcIsoString; publishedBy?: string }
-export interface WorkflowStage extends TenantEntity { workflowVersionId: string; key: string; name: string; type: 'work' | 'review' | 'approval' | 'automation'; order: number; slaMinutes?: number }
-export interface WorkflowTransition extends TenantEntity { workflowVersionId: string; fromStageId: string; toStageId: string; key: string; requiredPermission: string; conditionExpression?: string }
+export interface WorkflowVersion extends TenantEntity { templateId: string; versionNumber: number; status: 'draft' | 'published' | 'archived'; definitionHash: string; publishedAt?: UtcIsoString; publishedBy?: string }
+export interface WorkflowStage extends TenantEntity { workflowVersionId: string; key: string; name: string; type: 'work' | 'review' | 'approval' | 'automation'; order: number; terminal: boolean; slaMinutes?: number }
+export interface WorkflowTransition extends TenantEntity { workflowVersionId: string; fromStageId: string; toStageId: string; key: string; requiredPermission: string; condition?: Readonly<{ field: string; operator: 'equals' | 'not_equals' | 'exists'; value?: string | number | boolean }> }
 export interface TaskWorkflowInstance extends TenantEntity { taskId: string; workflowVersionId: string; currentStageId: string; status: WorkflowExecutionStatus; concurrencyVersion: number }
 export interface TaskStageExecution extends TenantEntity { workflowInstanceId: string; stageId: string; cycle: number; status: WorkflowExecutionStatus; enteredAt: UtcIsoString; exitedAt?: UtcIsoString; actorUserId?: string }
 export interface ReviewRequest extends TenantEntity { taskId: string; stageExecutionId: string; requestedBy: string; reviewerUserIds: readonly string[]; reviewedVersion: number; status: ReviewStatus; dueAt?: UtcIsoString }

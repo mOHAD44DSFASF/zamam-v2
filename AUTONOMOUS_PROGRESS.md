@@ -5,7 +5,8 @@
 - Prompt 11 Workspace redesign: **Complete / Gate PASS**. Explicit membership entities, validated tenant context, trusted API route registry, deterministic V1 inventory/quarantine, 13 focused tests and 5 emulator rules tests.
 - Prompt 12 Task management core: **Complete**. Typed task aggregate, guarded lifecycle/concurrency, assignments, subtasks/checklists, audited commands, and RTL create/edit/details.
 - Prompt 13 Task views and saved filters: **Complete**. Scoped bounded query planner, assignment resolution, search boundary, audited saved views, and URL-preserved list/board/calendar/timeline.
-- Prompt 14 Workflow builder: **In progress**. Draft graph validation, immutable publish versions, simulation, and accessible builder.
+- Prompt 14 Workflow builder: **Complete**. Declarative graph validation/simulation, versioned immutable publication with step-up, atomic records, and accessible RTL builder.
+- Prompt 15 Workflow execution engine: **In progress**. Pinned instances, guarded transitions, SLA/escalation, exactly-once effects, and recovery controls.
 
 آخر تحديث: 2026-07-30
 

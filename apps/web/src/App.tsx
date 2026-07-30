@@ -10,6 +10,7 @@ const ClientManagementPage = lazy(() => import('./features/clients/ClientManagem
 const ProjectManagementPage = lazy(() => import('./features/projects/ProjectManagementPage').then((module) => ({ default: module.ProjectManagementPage })))
 const WorkspaceManagementPage = lazy(() => import('./features/workspaces/WorkspaceManagementPage').then((module) => ({ default: module.WorkspaceManagementPage })))
 const TaskManagementPage = lazy(() => import('./features/tasks/TaskManagementPage').then((module) => ({ default: module.TaskManagementPage })))
+const WorkflowBuilderPage = lazy(() => import('./features/workflows/WorkflowBuilderPage').then((module) => ({ default: module.WorkflowBuilderPage })))
 const EmployeeWorkspace = lazy(() => import('./pages/EmployeeWorkspace').then((module) => ({ default: module.EmployeeWorkspace })))
 const InvitationAcceptance = lazy(() => import('./pages/InvitationAcceptance').then((module) => ({ default: module.InvitationAcceptance })))
 const Login = lazy(() => import('./pages/Login').then((module) => ({ default: module.Login })))
@@ -42,6 +43,7 @@ function App() {
             <Route path="/projects" element={<ProjectManagementPage />} />
             <Route path="/workspaces" element={<WorkspaceManagementPage />} />
             <Route path="/tasks" element={<TaskManagementPage />} />
+            <Route path="/workflows/:templateId/builder" element={<WorkflowBuilderPage />} />
           </Route>
           <Route path="/" element={<Navigate to="/workspace" replace />} />
           <Route path="*" element={<Navigate to="/workspace" replace />} />
