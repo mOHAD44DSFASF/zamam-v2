@@ -13,17 +13,33 @@ import {
   type InvitationLookupPort,
 } from '../services/functions/src/employee/service'
 
+/**
+ * Enforces the real Firestore transaction rule ("all reads before any writes") that a plain Map-backed
+ * fake would silently let slide — a plain fake here would never have caught the read-after-write bug that
+ * shipped in acceptInvitation/activateInvitation/disable (and AuditCommandService.execute() itself).
+ */
 class MemoryStore implements AtomicStore {
   records = new Map<string, StoredDocument>()
   async runTransaction<TResult>(operation: (transaction: AtomicTransaction) => Promise<TResult>): Promise<TResult> {
     const working = new Map([...this.records].map(([path, value]) => [path, { ...value }]))
+    let writeStarted = false
     const transaction: AtomicTransaction = {
-      get: async (path) => working.get(path) ?? null,
+      get: async (path) => {
+        if (writeStarted) {
+          throw new Error(
+            `FIRESTORE_TRANSACTION_READ_AFTER_WRITE: read of "${path}" occurred after a write was already ` +
+            'queued in this transaction; Firestore requires all reads to happen before any writes.',
+          )
+        }
+        return working.get(path) ?? null
+      },
       create: (path, data) => {
+        writeStarted = true
         if (working.has(path)) throw new Error('ALREADY_EXISTS')
         working.set(path, { ...data })
       },
       update: (path, data) => {
+        writeStarted = true
         const current = working.get(path)
         if (!current) throw new Error('NOT_FOUND')
         working.set(path, { ...current, ...data })
@@ -128,6 +144,11 @@ const seedActiveEmployee = (store: MemoryStore, userId = 'user-1') => {
   store.records.set(`v2Organizations/org-1/_userAccessState/${userId}`, {
     organizationId: 'org-1', schemaVersion: 2, version: 1, userId, state: 'active',
   })
+  // An already-active employee would already have accepted an invitation, which projects this doc.
+  store.records.set(`sessionViews/${userId}`, {
+    userId, displayName: 'Active Employee', accountStatus: 'active',
+    memberships: [{ organizationId: 'org-1', status: 'active' }, { organizationId: 'org-other', status: 'active' }],
+  })
 }
 
 describe('employee invitation saga', () => {
@@ -211,6 +232,34 @@ describe('invitation acceptance', () => {
     const invitationRecord = [...store.records.entries()].find(([path]) => path.includes('/invitation/'))?.[1]
     expect(invitationRecord).toMatchObject({ status: 'accepted' })
     expect(identities.setPassword).toHaveBeenCalledWith(userId, 'a-very-strong-password-1')
+    // This is what apps/web/src/auth/session-reader.ts reads to gate ProtectedRoute — without it the user
+    // this invitation just activated could never log in (the bug behind commit 5b1ca23 and this fix).
+    expect(store.records.get(`sessionViews/${userId}`)).toEqual({
+      userId, displayName: 'مدعو جديد', accountStatus: 'active',
+      memberships: [{ organizationId: 'org-1', status: 'active' }],
+    })
+  })
+
+  it('adds this organization to an existing sessionViews doc without dropping other organizations already there', async () => {
+    const store = new MemoryStore()
+    const identities = identityPort('new-user')
+    store.records.set('sessionViews/new-user', {
+      userId: 'new-user', displayName: 'Old Name', accountStatus: 'active',
+      memberships: [{ organizationId: 'org-other', status: 'active' }],
+    })
+    const { service, invitationToken, userId } = await seedInvitation(store, identities)
+    await service.acceptInvitation({
+      invitationToken, password: 'a-very-strong-password-1',
+      idempotencyKey: 'accept-key-multi-org', correlationId: 'correlation-accept-multi-org',
+    })
+    expect(store.records.get(`sessionViews/${userId}`)).toEqual({
+      userId, displayName: 'مدعو جديد', accountStatus: 'active',
+      memberships: expect.arrayContaining([
+        { organizationId: 'org-other', status: 'active' },
+        { organizationId: 'org-1', status: 'active' },
+      ]),
+    })
+    expect((store.records.get(`sessionViews/${userId}`)?.memberships as unknown[]).length).toBe(2)
   })
 
   it('rejects an expired invitation token', async () => {
@@ -294,6 +343,11 @@ describe('employee disable and departure', () => {
     expect(store.records.get('v2Organizations/org-1/organization_membership/user-1')).toMatchObject({ status: 'suspended', version: 2 })
     expect(identities.disableIdentity).toHaveBeenCalledWith('user-1')
     expect(identities.revokeRefreshTokens).toHaveBeenCalledWith('user-1')
+    // org-1's entry is removed from sessionViews so the next login sees no active membership there — the
+    // still-active org-other entry is left untouched (a user can belong to more than one organization).
+    expect(store.records.get('sessionViews/user-1')).toMatchObject({
+      memberships: [{ organizationId: 'org-other', status: 'active' }],
+    })
     const session: SessionAccount = {
       identity: { userId: 'user-1', email: null, emailVerified: true, tokenIssuedAt: 10 },
       accountStatus: 'active',
@@ -364,6 +418,9 @@ describe('employee disable and departure', () => {
     expect(store.records.get('v2Organizations/org-1/project_member/project-ref')).toMatchObject({ status: 'ended', version: 2 })
     expect(store.records.get('v2Organizations/org-1/_teamAllocationByUser/user-1')).toMatchObject({ value: 0 })
     expect(store.records.get('v2Organizations/org-1/_primaryTeamByUser/user-1')).toMatchObject({ active: false })
+    expect(store.records.get('sessionViews/user-1')).toMatchObject({
+      memberships: [{ organizationId: 'org-other', status: 'active' }],
+    })
   })
 })
 

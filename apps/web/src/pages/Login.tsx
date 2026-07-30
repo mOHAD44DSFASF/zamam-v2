@@ -5,6 +5,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { browserLocalPersistence, browserSessionPersistence, setPersistence, signInWithEmailAndPassword } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
 import { auth } from '../lib/firebase';
+import { useAuth } from '../auth/auth-context';
 import zamamLogo from '../assets/ZAMAM/2-optimized.webp';
 import zamamIcon from '../assets/ZAMAM/1T-optimized.webp';
 
@@ -17,6 +18,7 @@ export const Login: React.FC = () => {
   const [rememberMe, setRememberMe] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
+  const { refreshSession } = useAuth();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,6 +28,10 @@ export const Login: React.FC = () => {
     try {
       await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
       await signInWithEmailAndPassword(auth, email, password);
+      // Resolve the session (reads sessionViews/{uid}) and let AuthProvider's state settle *before*
+      // navigating — otherwise ProtectedRoute reads the still-stale 'anonymous' status from before this
+      // sign-in and bounces straight back to /login, which reads as the page silently reprompting.
+      await refreshSession();
       const requestedPath = typeof location.state === 'object' && location.state && 'from' in location.state
         ? String(location.state.from)
         : '/workspace';

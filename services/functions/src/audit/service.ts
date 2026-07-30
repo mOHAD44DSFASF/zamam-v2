@@ -75,6 +75,7 @@ export class AuditCommandService {
 
   async execute<TResult>(context: AuditedCommandContext, operation: (transaction: AtomicTransaction) => Promise<AuditedMutation<TResult>>): Promise<{ result: TResult; replayed: boolean }> {
     const idempotencyPath = tenantSystemPath(context.organizationId, '_idempotency', context.idempotencyKey)
+    const sequencePath = tenantSystemPath(context.organizationId, '_counters', 'audit-sequence')
     try {
       return await this.store.runTransaction(async (transaction) => {
         const existing = await transaction.get(idempotencyPath)
@@ -85,9 +86,16 @@ export class AuditCommandService {
           if (typeof existing.responseJson !== 'string') throw new Error('IDEMPOTENCY_IN_PROGRESS')
           return { result: JSON.parse(existing.responseJson) as TResult, replayed: true }
         }
+        // Read the counter BEFORE calling operation() — operation's own callback (e.g. EmployeeService
+        // commands) performs its own writes before returning, and Firestore transactions reject any read
+        // that happens after a write has already been queued anywhere in the same transaction.
+        const currentSequence = await transaction.get(sequencePath)
 
         const mutation = await operation(transaction)
-        const sequence = await nextAuditSequence(transaction, context.organizationId)
+        const sequence = typeof currentSequence?.value === 'number' ? currentSequence.value + 1 : 1
+        const sequenceData = { organizationId: context.organizationId, schemaVersion: SCHEMA_VERSION, value: sequence, updatedAt: SERVER_TIMESTAMP }
+        if (currentSequence) transaction.update(sequencePath, sequenceData)
+        else transaction.create(sequencePath, { ...sequenceData, createdAt: SERVER_TIMESTAMP })
         const auditId = randomUUID()
         const outboxId = randomUUID()
         transaction.create(tenantSystemPath(context.organizationId, '_auditEvents', auditId), auditRecord(context, mutation, 'succeeded', sequence))

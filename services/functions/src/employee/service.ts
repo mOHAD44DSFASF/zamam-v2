@@ -17,6 +17,7 @@ import {
 } from '@zamam/firestore'
 import { z } from 'zod'
 import { AuditCommandService } from '../audit/service.js'
+import { projectMembershipActive, projectMembershipInactive, sessionViewPath } from '../platform/session-view.js'
 
 const idSchema = z.string().regex(/^[A-Za-z0-9_-]{2,128}$/)
 const versionSchema = z.number().int().positive()
@@ -88,6 +89,12 @@ export type EmployeeAccessReference = {
   kind: Extract<TenantEntityKind, 'role_assignment' | 'team_membership' | 'project_member'>
   id: string
   expectedVersion: number
+}
+
+interface AccessReferenceRevocationPlan {
+  path: string
+  update: StoredDocument
+  dependents?: { path: string; update: StoredDocument }[]
 }
 
 export interface EmployeeLifecyclePort {
@@ -303,16 +310,26 @@ export class EmployeeService {
     await this.identities.setPassword(userId, parsed.password)
 
     return this.audit.execute(context, async (transaction) => {
+      const membershipPath = tenantDocumentPath(located.organizationId, 'organization_membership', userId)
+      const employmentPath = tenantDocumentPath(located.organizationId, 'employment_profile', userId)
+      const userProfilePath = tenantDocumentPath(located.organizationId, 'user_profile', userId)
+      const statePath = systemPath(located.organizationId, '_userAccessState', userId)
+
+      // Read phase — every get() must happen before any write() in a Firestore transaction.
       const invitation = await readOwned(transaction, invitationPath, located.organizationId)
+      const membership = await readOwned(transaction, membershipPath, located.organizationId)
+      const employment = await readOwned(transaction, employmentPath, located.organizationId)
+      const userProfile = await readOwned(transaction, userProfilePath, located.organizationId)
+      const state = await transaction.get(statePath)
+      const existingSessionView = await transaction.get(sessionViewPath(userId))
+
       assertTokenMatches(invitation, tokenHash)
       if (invitation.userId !== userId) throw new Error('INVITATION_TOKEN_INVALID')
       if (invitation.status !== 'pending') throw new Error('INVITATION_ALREADY_USED')
       if (Date.parse(String(invitation.expiresAt)) <= Date.now()) throw new Error('INVITATION_EXPIRED')
-      const membershipPath = tenantDocumentPath(located.organizationId, 'organization_membership', userId)
-      const membership = await readOwned(transaction, membershipPath, located.organizationId)
       if (membership.status !== 'invited') throw new Error('MEMBERSHIP_NOT_INVITED')
-      const employmentPath = tenantDocumentPath(located.organizationId, 'employment_profile', userId)
-      const employment = await readOwned(transaction, employmentPath, located.organizationId)
+
+      // Write phase.
       transaction.update(invitationPath, {
         status: 'accepted', acceptedAt: SERVER_TIMESTAMP,
         version: numeric(invitation.version) + 1, updatedAt: SERVER_TIMESTAMP,
@@ -324,9 +341,10 @@ export class EmployeeService {
       transaction.update(employmentPath, {
         status: 'active', version: numeric(employment.version) + 1, updatedAt: SERVER_TIMESTAMP,
       })
-      const statePath = systemPath(located.organizationId, '_userAccessState', userId)
-      const state = await transaction.get(statePath)
       if (state) transaction.update(statePath, { state: 'active', version: numeric(state.version) + 1, updatedAt: SERVER_TIMESTAMP })
+      projectMembershipActive(transaction, existingSessionView, {
+        userId, organizationId: located.organizationId, displayName: String(userProfile.displayName ?? ''),
+      })
       return {
         result: { userId, membershipStatus: 'active' as const },
         resourceType: 'organization_membership',
@@ -342,16 +360,25 @@ export class EmployeeService {
     const context = await this.authorized(metadata, 'membership.manage', userId)
     return this.audit.execute(context, async (transaction) => {
       const membershipPath = tenantDocumentPath(metadata.organizationId, 'organization_membership', userId)
+      const employmentPath = tenantDocumentPath(metadata.organizationId, 'employment_profile', userId)
+      const userProfilePath = tenantDocumentPath(metadata.organizationId, 'user_profile', userId)
+      const statePath = systemPath(metadata.organizationId, '_userAccessState', userId)
+
       const membership = await readOwned(transaction, membershipPath, metadata.organizationId)
+      const employment = await readOwned(transaction, employmentPath, metadata.organizationId)
+      const userProfile = await readOwned(transaction, userProfilePath, metadata.organizationId)
+      const state = await transaction.get(statePath)
+      const existingSessionView = await transaction.get(sessionViewPath(userId))
+
       if (membership.status !== 'invited') throw new Error('MEMBERSHIP_NOT_INVITED')
       if (membership.version !== expectedMembershipVersion) throw new Error('VERSION_CONFLICT')
-      const employmentPath = tenantDocumentPath(metadata.organizationId, 'employment_profile', userId)
-      const employment = await readOwned(transaction, employmentPath, metadata.organizationId)
+
       transaction.update(membershipPath, { status: 'active', joinedAt: SERVER_TIMESTAMP, version: expectedMembershipVersion + 1, updatedAt: SERVER_TIMESTAMP })
       transaction.update(employmentPath, { status: 'active', version: numeric(employment.version) + 1, updatedAt: SERVER_TIMESTAMP })
-      const statePath = systemPath(metadata.organizationId, '_userAccessState', userId)
-      const state = await transaction.get(statePath)
       if (state) transaction.update(statePath, { state: 'active', version: numeric(state.version) + 1, updatedAt: SERVER_TIMESTAMP })
+      projectMembershipActive(transaction, existingSessionView, {
+        userId, organizationId: metadata.organizationId, displayName: String(userProfile.displayName ?? ''),
+      })
       return {
         result: { userId, status: 'active' as const },
         resourceType: 'organization_membership',
@@ -374,9 +401,17 @@ export class EmployeeService {
     }
     const result = await this.audit.execute(context, async (transaction) => {
       const membershipPath = tenantDocumentPath(metadata.organizationId, 'organization_membership', userId)
+      const employmentPath = tenantDocumentPath(metadata.organizationId, 'employment_profile', userId)
+      const statePath = systemPath(metadata.organizationId, '_userAccessState', userId)
+
       const membership = await readOwned(transaction, membershipPath, metadata.organizationId)
+      const employment = await readOwned(transaction, employmentPath, metadata.organizationId)
+      const state = await transaction.get(statePath)
+      const existingSessionView = await transaction.get(sessionViewPath(userId))
+
       if (membership.status !== 'active') throw new Error('MEMBERSHIP_NOT_ACTIVE')
       if (membership.version !== expectedMembershipVersion) throw new Error('VERSION_CONFLICT')
+
       transaction.update(membershipPath, {
         status: 'suspended',
         suspensionReason: normalizedReason,
@@ -385,12 +420,9 @@ export class EmployeeService {
         version: expectedMembershipVersion + 1,
         updatedAt: SERVER_TIMESTAMP,
       })
-      const employmentPath = tenantDocumentPath(metadata.organizationId, 'employment_profile', userId)
-      const employment = await readOwned(transaction, employmentPath, metadata.organizationId)
       transaction.update(employmentPath, { status: 'suspended', version: numeric(employment.version) + 1, updatedAt: SERVER_TIMESTAMP })
-      const statePath = systemPath(metadata.organizationId, '_userAccessState', userId)
-      const state = await transaction.get(statePath)
       if (state) transaction.update(statePath, { state: 'disabled', version: numeric(state.version) + 1, updatedAt: SERVER_TIMESTAMP })
+      projectMembershipInactive(transaction, existingSessionView, { userId, organizationId: metadata.organizationId })
       return {
         result: { userId, status: 'suspended' as const },
         resourceType: 'organization_membership',
@@ -422,23 +454,35 @@ export class EmployeeService {
     if (references.length > 400) throw new Error('DEPARTURE_REQUIRES_BATCH_WORKFLOW')
     const result = await this.audit.execute(context, async (transaction) => {
       const membershipPath = tenantDocumentPath(metadata.organizationId, 'organization_membership', userId)
+      const employmentPath = tenantDocumentPath(metadata.organizationId, 'employment_profile', userId)
+      const statePath = systemPath(metadata.organizationId, '_userAccessState', userId)
+
+      // Read phase — including every access reference's own reads (each planAccessReferenceRevocation()
+      // call only reads, never writes), all before any transaction.update()/create() below.
       const membership = await readOwned(transaction, membershipPath, metadata.organizationId)
+      const employment = await readOwned(transaction, employmentPath, metadata.organizationId)
+      const state = await transaction.get(statePath)
+      const existingSessionView = await transaction.get(sessionViewPath(userId))
+      const revocationPlans: AccessReferenceRevocationPlan[] = []
+      for (const reference of references) {
+        revocationPlans.push(await this.planAccessReferenceRevocation(transaction, metadata.organizationId, userId, reference))
+      }
+
       if (!['active', 'suspended'].includes(String(membership.status))) throw new Error('MEMBERSHIP_NOT_DEPARTABLE')
       if (membership.version !== expectedMembershipVersion) throw new Error('VERSION_CONFLICT')
-      const statePath = systemPath(metadata.organizationId, '_userAccessState', userId)
-      const state = await transaction.get(statePath)
       if (!state) throw new Error('ACCESS_STATE_NOT_FOUND')
+
+      // Write phase.
       transaction.update(statePath, { state: 'departed', version: numeric(state.version) + 1, updatedAt: SERVER_TIMESTAMP })
       transaction.update(membershipPath, {
         status: 'left', leftAt: SERVER_TIMESTAMP, version: expectedMembershipVersion + 1, updatedAt: SERVER_TIMESTAMP,
       })
-      const employmentPath = tenantDocumentPath(metadata.organizationId, 'employment_profile', userId)
-      const employment = await readOwned(transaction, employmentPath, metadata.organizationId)
       transaction.update(employmentPath, {
         status: 'ended', endDate: normalizedEndDate, endReason: normalizedReason,
         version: numeric(employment.version) + 1, updatedAt: SERVER_TIMESTAMP,
       })
-      for (const reference of references) await this.revokeAccessReference(transaction, metadata.organizationId, userId, reference)
+      for (const plan of revocationPlans) this.applyAccessReferenceRevocation(transaction, plan)
+      projectMembershipInactive(transaction, existingSessionView, { userId, organizationId: metadata.organizationId })
       return {
         result: { userId, status: 'left' as const, revokedAccessCount: references.length },
         resourceType: 'employment_profile',
@@ -455,12 +499,17 @@ export class EmployeeService {
     return result
   }
 
-  private async revokeAccessReference(
+  /**
+   * Read-only: resolves everything needed to revoke one access reference (and, for team memberships, its
+   * dependent counters) without issuing any writes — split from applyAccessReferenceRevocation() so a
+   * caller can run this for every reference in the read phase, then apply every plan in the write phase.
+   */
+  private async planAccessReferenceRevocation(
     transaction: AtomicTransaction,
     organizationId: string,
     userId: string,
     reference: EmployeeAccessReference,
-  ) {
+  ): Promise<AccessReferenceRevocationPlan> {
     idSchema.parse(reference.id)
     versionSchema.parse(reference.expectedVersion)
     const path = tenantDocumentPath(organizationId, reference.kind, reference.id)
@@ -468,27 +517,33 @@ export class EmployeeService {
     if (record.userId !== userId || record.version !== reference.expectedVersion) throw new Error('ACCESS_REFERENCE_CONFLICT')
     const version = reference.expectedVersion + 1
     if (reference.kind === 'role_assignment') {
-      transaction.update(path, { status: 'revoked', revokedAt: SERVER_TIMESTAMP, version, updatedAt: SERVER_TIMESTAMP })
-      return
+      return { path, update: { status: 'revoked', revokedAt: SERVER_TIMESTAMP, version, updatedAt: SERVER_TIMESTAMP } }
     }
-    transaction.update(path, { status: 'ended', endedAt: SERVER_TIMESTAMP, version, updatedAt: SERVER_TIMESTAMP })
-    if (reference.kind === 'team_membership') {
-      const teamId = String(record.teamId)
-      const memberCountPath = systemPath(organizationId, '_teamActiveMemberCounts', teamId)
-      const memberCount = await transaction.get(memberCountPath)
-      if (memberCount) transaction.update(memberCountPath, { value: Math.max(0, numeric(memberCount.value) - 1), updatedAt: SERVER_TIMESTAMP })
-      const allocationPath = systemPath(organizationId, '_teamAllocationByUser', userId)
-      const allocation = await transaction.get(allocationPath)
-      if (allocation) transaction.update(allocationPath, {
-        value: Math.max(0, numeric(allocation.value) - numeric(record.allocationPercent ?? 0)),
-        updatedAt: SERVER_TIMESTAMP,
-      })
-      if (record.isPrimary === true) {
-        const primaryPath = systemPath(organizationId, '_primaryTeamByUser', userId)
-        const primary = await transaction.get(primaryPath)
-        if (primary) transaction.update(primaryPath, { active: false, updatedAt: SERVER_TIMESTAMP })
-      }
+    const update: StoredDocument = { status: 'ended', endedAt: SERVER_TIMESTAMP, version, updatedAt: SERVER_TIMESTAMP }
+    if (reference.kind !== 'team_membership') return { path, update }
+
+    const teamId = String(record.teamId)
+    const memberCountPath = systemPath(organizationId, '_teamActiveMemberCounts', teamId)
+    const allocationPath = systemPath(organizationId, '_teamAllocationByUser', userId)
+    const memberCount = await transaction.get(memberCountPath)
+    const allocation = await transaction.get(allocationPath)
+    const dependents: { path: string; update: StoredDocument }[] = []
+    if (memberCount) dependents.push({ path: memberCountPath, update: { value: Math.max(0, numeric(memberCount.value) - 1), updatedAt: SERVER_TIMESTAMP } })
+    if (allocation) dependents.push({
+      path: allocationPath,
+      update: { value: Math.max(0, numeric(allocation.value) - numeric(record.allocationPercent ?? 0)), updatedAt: SERVER_TIMESTAMP },
+    })
+    if (record.isPrimary === true) {
+      const primaryPath = systemPath(organizationId, '_primaryTeamByUser', userId)
+      const primary = await transaction.get(primaryPath)
+      if (primary) dependents.push({ path: primaryPath, update: { active: false, updatedAt: SERVER_TIMESTAMP } })
     }
+    return { path, update, dependents }
+  }
+
+  private applyAccessReferenceRevocation(transaction: AtomicTransaction, plan: AccessReferenceRevocationPlan) {
+    transaction.update(plan.path, plan.update)
+    for (const dependent of plan.dependents ?? []) transaction.update(dependent.path, dependent.update)
   }
 
   async upsertWorkSchedule(metadata: EmployeeCommandMetadata, rawInput: z.input<typeof scheduleSchema>) {

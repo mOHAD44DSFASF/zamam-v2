@@ -24,6 +24,7 @@ dist-ssr
 *.zip
 .artifacts/
 services/functions/deploy-dist/
+.local-run/
 
 # Editor directories and files
 .vscode/*
