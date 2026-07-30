@@ -6,8 +6,9 @@
 |---:|---|---|
 | Baseline | Complete | أرشيف محلي موثّق بالـ SHA-256؛ build ناجح؛ lint V1 به 52 مخالفة؛ لا tests في V1 |
 | P2 Repository restructuring | Complete | checkpoint `218878d`؛ npm workspaces، web boundary، 10 tests؛ جميع الفحوص خضراء |
-| P3 Authentication foundation | In progress | session boundary وinvitation/reset/emulator tests قيد التنفيذ |
-| P4-P28 | Pending | تُنفذ بالتسلسل بعد P3 |
+| P3 Authentication foundation | Complete | fail-closed guards، session read model، invite/reset adapters، 11 auth tests، browser evidence |
+| P4 Trusted backend foundation | In progress | API envelope/validation/idempotency/observability قيد التنفيذ |
+| P5-P28 | Pending | تُنفذ بالتسلسل بعد P4 |
 
 ## Baseline recovery
 

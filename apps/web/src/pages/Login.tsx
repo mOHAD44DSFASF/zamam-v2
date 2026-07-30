@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Lock, Mail, AlertCircle, Eye, EyeOff } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { browserLocalPersistence, browserSessionPersistence, setPersistence, signInWithEmailAndPassword } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { auth, db } from '../lib/firebase';
+import { auth } from '../lib/firebase';
 import zamamLogo from '../assets/ZAMAM/2.png';
 import zamamIcon from '../assets/ZAMAM/1T.png';
 
@@ -15,7 +14,9 @@ export const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,44 +24,12 @@ export const Login: React.FC = () => {
     setError('');
 
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-
-      // Check user role in Firestore
-      const userDocRef = doc(db, 'users', user.uid);
-      const userDoc = await getDoc(userDocRef);
-
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
-        
-        if (userData.isDeleted === true) {
-          await auth.signOut();
-          setError('⚠️ تم إيقاف هذا الحساب بواسطة الإدارة. يرجى مراجعة المسؤول.');
-          setIsLoading(false);
-          return;
-        }
-
-        const role = userData.role;
-
-
-        if (role === 'Admin' || role === 'DeputyManager' || role === 'Manager') {
-          navigate('/admin');
-        } else {
-          navigate('/workspace');
-        }
-      } else {
-        // First-time login: auto-create user doc with default role
-        const defaultRole = 'Creator';
-        await setDoc(userDocRef, {
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName || email.split('@')[0],
-          role: defaultRole, // default role
-          createdAt: new Date(),
-        });
-        
-        navigate('/workspace');
-      }
+      await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
+      await signInWithEmailAndPassword(auth, email, password);
+      const requestedPath = typeof location.state === 'object' && location.state && 'from' in location.state
+        ? String(location.state.from)
+        : '/workspace';
+      navigate(requestedPath, { replace: true });
     } catch (err: unknown) {
       const errorCode = err instanceof FirebaseError ? err.code : 'unknown';
       console.error('Login error:', errorCode);
@@ -157,14 +126,14 @@ export const Login: React.FC = () => {
               </div>
 
               <div className="flex items-center justify-between text-sm font-bold">
-                <a href="#" className="text-zamam-primary hover:text-zamam-primaryHover transition-colors underline-offset-4 hover:underline">نسيت كلمة المرور؟</a>
+                <Link to="/password-reset" className="text-zamam-primary hover:text-zamam-primaryHover transition-colors underline-offset-4 hover:underline">نسيت كلمة المرور؟</Link>
                 <label className="flex items-center gap-3 cursor-pointer group">
                   <span className="text-zamam-textGray group-hover:text-zamam-textDark transition-colors">تذكرني</span>
-                  <input type="checkbox" className="w-5 h-5 rounded-lg border-2 border-zamam-gray text-zamam-primary focus:ring-zamam-primary cursor-pointer transition-all" />
+                  <input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} className="w-5 h-5 rounded-lg border-2 border-zamam-gray text-zamam-primary focus:ring-zamam-primary cursor-pointer transition-all" />
                 </label>
               </div>
 
-              <button 
+              <button
                 type="submit" 
                 disabled={isLoading}
                 className="w-full py-3.5 lg:py-4 bg-gradient-to-l from-[#1B5E5A] to-[#1A2744] text-white rounded-2xl font-black text-lg lg:text-xl hover:opacity-90 shadow-[0_10px_20px_rgba(27,94,90,0.3)] hover:shadow-[0_15px_30px_rgba(27,94,90,0.4)] transition-all active:scale-[0.97] flex items-center justify-center gap-3 disabled:opacity-70 disabled:cursor-not-allowed mt-2"
@@ -187,4 +156,3 @@ export const Login: React.FC = () => {
     </div>
   );
 };
-

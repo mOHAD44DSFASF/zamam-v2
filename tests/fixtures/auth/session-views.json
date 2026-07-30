@@ -1,0 +1,16 @@
+{
+  "active": {
+    "userId": "user-active",
+    "displayName": "Active User",
+    "email": "active@example.com",
+    "accountStatus": "active",
+    "memberships": [{ "organizationId": "org-test", "status": "active" }]
+  },
+  "disabled": {
+    "userId": "user-disabled",
+    "displayName": "Disabled User",
+    "email": "disabled@example.com",
+    "accountStatus": "disabled",
+    "memberships": [{ "organizationId": "org-test", "status": "active" }]
+  }
+}
