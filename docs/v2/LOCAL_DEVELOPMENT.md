@@ -60,3 +60,19 @@ scripting without shell history exposing a password.)
 On success it prints a JSON summary including `userId`, `roleAssignmentId`, and which actions this
 specific run actually performed (`actionsPerformedThisRun: []` on a second run means it was already
 fully bootstrapped — nothing was duplicated).
+
+## Running the workers service locally
+
+`createWorkerHttpHandler()` (`services/workers/src/http.ts`) is a Web-standard `Request -> Response`
+handler with no server wired to it. `services/workers/src/server.ts` is that wiring: a thin Node
+`http` server that adapts Node's request/response streams to that handler — no dispatch or business
+logic lives in it.
+
+```
+npm run build --workspace=@zamam/workers
+npm run start --workspace=@zamam/workers
+```
+
+(`npm run dev --workspace=@zamam/workers` builds and starts in one step.) It listens on
+`WORKER_HTTP_PORT` (falls back to `PORT`, then `8081`), and logs a single startup line with the port
+and mode (`local` unless `ZAMAM_ENV=production`) — no secrets. `GET /health` is a good smoke check.
