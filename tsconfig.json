@@ -1,7 +1,15 @@
 {
   "files": [],
   "references": [
-    { "path": "./tsconfig.app.json" },
-    { "path": "./tsconfig.node.json" }
+    { "path": "./apps/web/tsconfig.app.json" },
+    { "path": "./apps/web/tsconfig.node.json" },
+    { "path": "./packages/domain" },
+    { "path": "./packages/contracts" },
+    { "path": "./packages/authorization" },
+    { "path": "./packages/config" },
+    { "path": "./packages/firestore" },
+    { "path": "./packages/observability" },
+    { "path": "./services/functions" },
+    { "path": "./services/workers" }
   ]
 }

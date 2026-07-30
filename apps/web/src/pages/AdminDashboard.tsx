@@ -7,7 +7,7 @@ import { UserEditModal } from '../components/UserEditModal';
 import { useNavigate } from 'react-router-dom';
 import zamamIcon from '../assets/ZAMAM/1T.png';
 import { auth, db } from '../lib/firebase';
-import { onAuthStateChanged, GoogleAuthProvider, linkWithPopup } from 'firebase/auth';
+import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, collection, getDocs, setDoc, addDoc, deleteDoc, onSnapshot, query, updateDoc } from 'firebase/firestore';
 import { GoogleDriveService } from '../lib/googleDrive';
 
@@ -200,40 +200,10 @@ export const AdminDashboard: React.FC = () => {
   }, [teamMembers, filteredWorkspaces, userRole]);
 
   const connectDrive = async () => {
-    if (isDriveConnected) {
-      setIsDriveConnected(false);
-      await setDoc(doc(db, 'settings', 'general'), { isDriveConnected: false }, { merge: true });
-      return;
-    }
-    
-    if (!auth.currentUser) return;
-
-    try {
-      const provider = new GoogleAuthProvider();
-      provider.addScope('https://www.googleapis.com/auth/drive.file');
-      await linkWithPopup(auth.currentUser!, provider);
-      setIsDriveConnected(true);
-      await setDoc(doc(db, 'settings', 'general'), { isDriveConnected: true }, { merge: true });
-      setAlertMessage({ title: 'تم الربط', message: 'تم ربط حساب Google Drive بنجاح.' });
-    } catch (error: any) {
-      console.error("Drive connection error:", error);
-      if (error.code === 'auth/credential-already-in-use') {
-        alert("⚠️ عذراً، هذا الحساب مرتبط بالفعل بمستخدم آخر في النظام. يرجى استخدام حساب Google مختلف.");
-      } else if (error.code === 'auth/operation-not-allowed') {
-         setAlertMessage({
-           title: 'تنبيه من Firebase', 
-           message: 'الرجاء تفعيل تسجيل الدخول بواسطة Google من لوحة تحكم Firebase (Authentication > Sign-in method) لكي يعمل الربط فعلياً. سيتم تفعيل الزر الآن شكلياً للحفظ في قاعدة البيانات.'
-         });
-         setIsDriveConnected(true);
-         await setDoc(doc(db, 'settings', 'general'), { isDriveConnected: true }, { merge: true });
-      } else if (error.code === 'auth/credential-already-in-use') {
-         setAlertMessage({ title: 'مربوط مسبقاً', message: 'حساب جوجل هذا مربوط بالفعل.' });
-         setIsDriveConnected(true);
-         await setDoc(doc(db, 'settings', 'general'), { isDriveConnected: true }, { merge: true });
-      } else {
-         setAlertMessage({ title: 'حدث خطأ', message: error.message });
-      }
-    }
+    setAlertMessage({
+      title: 'التكامل غير مهيأ',
+      message: 'ربط Google Drive من المتصفح معطل حتى يتوفر backend موثوق.',
+    });
   };
 
   const deleteTask = async (taskId: string) => {
@@ -941,7 +911,7 @@ export const AdminDashboard: React.FC = () => {
         teamMembers={teamMembers}
         onSubmit={async (data) => {
           try {
-             let finalData = { ...data };
+             const finalData = { ...data };
              if (isDriveConnected) {
                const folderResult = await GoogleDriveService.createFolder(data.title);
                if (folderResult.success && folderResult.folderUrl) {

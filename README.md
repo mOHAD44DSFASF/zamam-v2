@@ -1,73 +1,45 @@
-# React + TypeScript + Vite
+# ZAMAM V2
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+منصة عربية لإدارة عمليات الوكالات، قيد التحويل المرحلي من النموذج الأولي V1 إلى بنية V2 موثوقة.
 
-Currently, two official plugins are available:
+## المتطلبات
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Node.js 24.x
+- npm 11.x
+- Firebase Emulator Suite عند العمل على طبقة البيانات (لا تستخدم بيانات production محلياً)
 
-## React Compiler
+## أوامر التطوير
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```powershell
+npm.cmd install --ignore-scripts
+npm.cmd run dev
+npm.cmd run typecheck
+npm.cmd run lint
+npm.cmd test
+npm.cmd run build
+npm.cmd run check
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## بنية المستودع
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- `apps/web`: تطبيق React/Vite الحالي ومسار واجهة V2.
+- `packages/domain`: نماذج وقواعد النطاق الخالصة.
+- `packages/contracts`: عقود API والأحداث والتحقق.
+- `packages/authorization`: تقييم الصلاحيات والنطاقات.
+- `packages/config`: قراءة الإعدادات والتحقق منها.
+- `packages/firestore`: converters ومستودعات Firestore.
+- `packages/observability`: logging وcorrelation IDs.
+- `services/functions`: واجهة backend الموثوقة القصيرة.
+- `services/workers`: المهام غير المتزامنة والمجدولة.
+- `docs/v2`: وثائق المنتج والهندسة وقرارات التنفيذ.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## قواعد الأمان المحلية
+
+- لا تُحفظ ملفات `.env` أو القيم السرية في Git.
+- استخدم `apps/web/.env.example` للأسماء والصيغ الآمنة فقط.
+- لا تعتمد على إخفاء عناصر UI كآلية authorization.
+- لا تتصل بخدمات production أو تنشر من مسار التطوير الآلي.
+
+## الحالة
+
+راجع `AUTONOMOUS_PROGRESS.md` للحالة الحالية، و`docs/v2/IMPLEMENTATION_ROADMAP.md` لتسلسل Prompts 2-28.
