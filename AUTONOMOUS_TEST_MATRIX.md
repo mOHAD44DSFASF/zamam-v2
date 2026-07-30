@@ -1,6 +1,9 @@
 # Autonomous Test Matrix
 
-Latest additions: P20 notification projection/delivery 11 passed; RTL notification center 3. Full suite 333/333; emulator 5/5.
+Latest additions: P21 workload/capacity domain and projection 7 passed; RTL workload 3. Full suite 343/343; latest emulator gate 5/5.
+
+| P21 | domain/service/privacy | part-time، leave/holiday deduction، overlap، unknown schedule/estimate، overload، scoped audited projection، bounded query | 7 pass |
+| P21 | RTL UI/accessibility | explainable capacity، unknown warning، rebuild boundary، name redaction، axe | 3 pass |
 
 | P20 | domain/service/security | outbox projection، audience access، minimized payload، deterministic dedupe، critical override، quiet hours، bounded queries | 7 pass |
 | P20 | delivery/provider | digest grouping، safe locale content، SHA-256 idempotency، retry، DLQ، mocked Resend 429 | 4 pass |

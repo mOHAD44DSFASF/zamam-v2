@@ -80,6 +80,7 @@ infra/firebase/
 | File Service | upload intent/finalize/version/share/delete/restore | storage adapter, scanner؛ file perms | metadata+outbox؛ `file.uploaded` | signed expiry/checksum؛ Idem finalize/delete |
 | Notification Service | inbox/preferences/routing؛ `NotificationProjectionService` يستهلك outbox | event bus/audience/preferences | notification + delivery atomic per recipient | deterministic dedupe by recipient/event؛ payload minimization؛ critical override |
 | Notification Delivery Worker | digest grouping/email delivery/retry/DLQ | recipient directory/provider | claim ثم provider ثم delivered/retry | batch 50؛ SHA-256 idempotency؛ لا work data في البريد |
+| Workload Projection Service | حساب schedule ناقص absence مقابل assignment estimates وإعادة بناء `capacity_plan` | People/Schedule/Leave/Task sources | source reads ثم audited projection transaction | batch 100؛ unknown لا يتحول صفرًا؛ لا HR reason في projection |
 | Time Tracking Service | timer/entries/timesheets/adjust | Task/Employment؛ time perms | entry/timesheet+AE | overlap/version checks؛ Idem timer stop/submit |
 | Attendance Service | record/import/correct/reconcile | Schedule/Leave؛ attendance perms | daily logical record + event | dedupe device events؛ correction supersedes |
 | Leave Service | request/balance/approve/cancel | Employment/Schedule/Workflow | request+capacity impact+outbox | overlap/balance transaction؛ Idem |

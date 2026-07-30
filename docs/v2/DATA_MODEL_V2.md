@@ -74,7 +74,7 @@ Global collections محدودة:
 | `teamMemberships/{id}` | `teamId*,userId*,membershipRole*,status*,capacityPercent*,joinedAt*,leftAt?` | d:user/team names optional | team+status; user+status | CMD; S; AE; from workspace arrays after review; medium |
 | `workSchedules/{id}` | `name*,status*,timeZone*,weeklyRules:m*,breakRules:m,effectiveFrom*,effectiveTo?` | none | status+effectiveFrom | CMD; version/archive; AE; new |
 | `holidays/{id}` | `name*,date*,region*,paid*,status*` | none | region+date; status+date | CMD; annual retention; AE; new |
-| `capacityPlans/{id}` | `subjectType*,subjectId*,periodStart*,periodEnd*,availableMinutes*,allocatedMinutes*,status*` | d:subjectName | subject+period; period+status | JOB/CMD override; retain reporting; AE override; high yearly |
+| `capacity_plan/{capacity-YYYYMMDD-userId}` | `userId*,periodStart*,periodEnd*,scopeType*,scopeId*,scheduledMinutes?,absenceMinutes*,availableMinutes?,allocatedMinutes*,remainingMinutes?,utilizationPercent?,status*,assignmentCount*,unknownAssignmentCount*,overlapCount*,reasons*,calculatedAt*` | d:displayName حسب permission؛ لا leave reason/type | scope+period+utilization desc+user؛ status unknown منفصل | JOB/AUDITED rebuild؛ rebuildable read model؛ لا hard delete للـaudit؛ high weekly |
 
 ## 4. Clients, Projects and Workspaces
 

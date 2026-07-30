@@ -62,7 +62,25 @@ export interface AttendanceRecord extends TenantEntity { userId: string; date: s
 export interface LeaveType extends TenantEntity, ArchiveFields { name: string; paid: boolean; annualAllowanceDays?: number }
 export interface LeaveRequest extends TenantEntity { userId: string; leaveTypeId: string; startsOn: string; endsOn: string; status: LeaveRequestStatus; approverUserId?: string; decidedAt?: UtcIsoString }
 export interface Holiday extends TenantEntity { name: string; date: string; branchId?: string }
-export interface CapacityPlan extends TenantEntity { userId: string; periodStart: string; periodEnd: string; availableMinutes: number; allocatedMinutes: number }
+export interface CapacityPlan extends TenantEntity {
+  userId: string
+  periodStart: string
+  periodEnd: string
+  scheduledMinutes?: number
+  absenceMinutes: number
+  availableMinutes?: number
+  allocatedMinutes: number
+  remainingMinutes?: number
+  utilizationPercent?: number
+  status: 'unknown' | 'available' | 'balanced' | 'at_risk' | 'overallocated'
+  assignmentCount: number
+  unknownAssignmentCount: number
+  overlapCount: number
+  reasons: readonly string[]
+  scopeType: 'organization' | 'department' | 'team'
+  scopeId: string
+  calculatedAt: UtcIsoString
+}
 export interface Goal extends TenantEntity { ownerUserId?: string; teamId?: string; title: string; status: 'draft' | 'active' | 'completed' | 'cancelled'; dueOn?: string }
 export interface KPIDefinition extends TenantEntity, ArchiveFields { key: string; name: string; unit: string; direction: 'higher_better' | 'lower_better' | 'neutral'; status: 'active' | 'archived' }
 export interface KPIMeasurement extends TenantEntity { kpiDefinitionId: string; subjectType: 'organization' | 'department' | 'team' | 'user' | 'project'; subjectId: string; periodStart: string; periodEnd: string; value: number; delayAttribution?: 'assignee' | 'reviewer' | 'client' | 'dependency' | 'system' | 'unattributed' }

@@ -107,7 +107,7 @@ Dashboard، Projects، Requests، Approvals، Deliveries، Notifications، Profi
 | `/teams/:teamId` Team Details | team members/managers | members، work، workload، schedule summary | departed members distinguished؛ membership AE |
 | `/people` Employee Directory | `user.view` | safe profile fields؛ department/team/status/search | PII field projection؛ no compensation by default |
 | `/people/:userId` Employee Profile | self/scoped managers/HR | profile، employment، teams، work summary، time/leave tabs permissioned | field-level 403؛ HR changes/reports AE |
-| `/workload` Workload | self/team/org permissions | capacity vs allocation، date/team/project | no capacity = unknown not 0؛ drag assignment AE |
+| `/workload` Workload | `workload.view_self/team/organization` حسب scope | capacity vs allocation، period/scope، conflicts، audited rebuild | no schedule/estimate = unknown not 0؛ employee names capability؛ auto reassignment خارج P21 |
 
 ### Time, Attendance, Leave and Reports
 
