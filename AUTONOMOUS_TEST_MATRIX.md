@@ -1,6 +1,6 @@
 # Autonomous Test Matrix
 
-Latest additions: P12 task domain/service 9 passed; P12 RTL task create/edit/detail and accessibility 3 passed.
+Latest additions: P13 query/scope/search/saved views 6 passed; board/save-view UI assertions added to task UI suite.
 
 | Prompt | المستوى | النطاق | الحالة |
 |---:|---|---|---|

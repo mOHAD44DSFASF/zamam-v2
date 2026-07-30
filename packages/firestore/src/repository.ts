@@ -17,7 +17,7 @@ export interface AtomicStore {
 export interface PageQuery {
   organizationId: string
   entityKind: TenantEntityKind
-  filters?: readonly { field: string; operator: '==' | '<' | '<=' | '>' | '>=' | 'array-contains'; value: unknown }[]
+  filters?: readonly { field: string; operator: '==' | '<' | '<=' | '>' | '>=' | 'in' | 'array-contains'; value: unknown }[]
   orderBy: readonly { field: string; direction: 'asc' | 'desc' }[]
   limit: number
   cursor?: readonly unknown[]

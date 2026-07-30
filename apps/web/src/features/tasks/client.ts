@@ -22,7 +22,7 @@ export interface TaskSnapshot {
   tasks: readonly TaskSummary[]
   projects: readonly { id: string; name: string }[]
   workspaces: readonly { id: string; name: string; projectId?: string }[]
-  capabilities: { create: boolean; update: boolean; transition: boolean; assign: boolean; reopen: boolean; archive: boolean }
+  capabilities: { create: boolean; update: boolean; transition: boolean; assign: boolean; reopen: boolean; archive: boolean; saveView: boolean }
 }
 export interface TaskClient {
   load(organizationId: string): Promise<TaskSnapshot>
@@ -34,6 +34,7 @@ export interface TaskClient {
     taskId: string; expectedVersion: number; title: string; description: string;
     priority: TaskSummary['priority']; dueAt: string | null; clientVisible: boolean
   }): Promise<void>
+  saveView(organizationId: string, input: { name: string; view: 'list' | 'board' | 'calendar' | 'timeline' }): Promise<void>
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
@@ -58,5 +59,8 @@ export const taskClient: TaskClient = {
   load: (organizationId) => post('/v1/tasks/query', { organizationId, limit: 50 }),
   create: (organizationId, input) => post('/v1/tasks/create', { organizationId, id: crypto.randomUUID(), ...input }),
   update: (organizationId, input) => post('/v1/tasks/update', { organizationId, ...input }),
+  saveView: (organizationId, input) => post('/v1/task-views/create', {
+    organizationId, id: crypto.randomUUID(), resourceType: 'task',
+    name: input.name, filters: { presentation: input.view }, visibility: 'private',
+  }),
 }
-

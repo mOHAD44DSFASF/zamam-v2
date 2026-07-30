@@ -16,13 +16,14 @@ const snapshot: TaskSnapshot = {
   }],
   projects: [{ id: 'project-1', name: 'الموقع الجديد' }],
   workspaces: [{ id: 'workspace-1', name: 'مساحة التنفيذ', projectId: 'project-1' }],
-  capabilities: { create: true, update: true, transition: true, assign: true, reopen: true, archive: true },
+  capabilities: { create: true, update: true, transition: true, assign: true, reopen: true, archive: true, saveView: true },
 }
 function client(): TaskClient {
   return {
     load: vi.fn().mockResolvedValue(snapshot),
     create: vi.fn().mockResolvedValue(undefined),
     update: vi.fn().mockResolvedValue(undefined),
+    saveView: vi.fn().mockResolvedValue(undefined),
   }
 }
 
@@ -60,5 +61,12 @@ describe('task management UI', () => {
     })))
     expect(api.update).toHaveBeenCalledWith('org-1', expect.not.objectContaining({ projectId: expect.anything(), workspaceId: expect.anything() }))
   })
-})
 
+  it('renders board projection and saves it through an explicit command', async () => {
+    const api = client()
+    render(<TaskManagementScreen organizationId="org-1" client={api} view="board" />)
+    expect(await screen.findByRole('region', { name: 'لوحة المهام' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'حفظ العرض' }))
+    await waitFor(() => expect(api.saveView).toHaveBeenCalledWith('org-1', { name: 'عرض board', view: 'board' }))
+  })
+})

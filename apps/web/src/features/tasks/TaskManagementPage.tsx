@@ -1,5 +1,6 @@
-import { AlertTriangle, CheckSquare, CircleDot, Clock3, LoaderCircle, Pencil, Plus, RefreshCw, UserRound } from 'lucide-react'
+import { AlertTriangle, CalendarDays, CheckSquare, CircleDot, Clock3, Columns3, GanttChart, LayoutList, LoaderCircle, Pencil, Plus, RefreshCw, Save, UserRound } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useTenant } from '../../tenant/tenant-context'
 import { taskClient, type TaskClient, type TaskSnapshot, type TaskSummary } from './client'
 
@@ -10,7 +11,13 @@ const statusLabel: Record<TaskSummary['status'], string> = {
 }
 const priorityLabel = { low: 'منخفضة', medium: 'متوسطة', high: 'عالية', urgent: 'عاجلة' } as const
 
-export function TaskManagementScreen({ organizationId, client }: { organizationId: string; client: TaskClient }) {
+type TaskView = 'list' | 'board' | 'calendar' | 'timeline'
+export function TaskManagementScreen({ organizationId, client, view = 'list', onViewChange }: {
+  organizationId: string
+  client: TaskClient
+  view?: TaskView
+  onViewChange?: (view: TaskView) => void
+}) {
   const [snapshot, setSnapshot] = useState<TaskSnapshot | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -35,10 +42,19 @@ export function TaskManagementScreen({ organizationId, client }: { organizationI
   const selected = snapshot.tasks.find(({ id }) => id === selectedId) ?? null
   return <main dir="rtl" className="min-h-screen bg-gray-50">
     <header className="border-b bg-white"><div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-6"><div><p className="text-sm font-bold text-teal-800">العمل</p><h1 className="text-2xl font-black">المهام</h1></div>{snapshot.capabilities.create && <button onClick={() => setEditor('create')} className="inline-flex items-center gap-2 rounded-md bg-teal-800 px-4 py-2 font-bold text-white"><Plus className="size-4" aria-hidden="true" /> مهمة</button>}</div></header>
-    <div className="mx-auto grid max-w-7xl px-5 py-7 lg:grid-cols-[350px_1fr]">
+    <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-5 pt-6">
+      <div role="group" aria-label="طريقة عرض المهام" className="inline-flex border bg-white">
+        {([
+          ['list', 'قائمة', LayoutList], ['board', 'لوحة', Columns3],
+          ['calendar', 'تقويم', CalendarDays], ['timeline', 'خط زمني', GanttChart],
+        ] as const).map(([key, label, Icon]) => <button key={key} type="button" aria-pressed={view === key} onClick={() => onViewChange?.(key)} className="inline-flex min-w-20 items-center justify-center gap-2 border-l px-3 py-2 text-sm font-bold last:border-l-0 aria-pressed:bg-teal-50 aria-pressed:text-teal-900"><Icon className="size-4" aria-hidden="true" /> {label}</button>)}
+      </div>
+      {snapshot.capabilities.saveView && <button type="button" onClick={() => void client.saveView(organizationId, { name: `عرض ${view}`, view })} className="inline-flex items-center gap-2 rounded-md border bg-white px-3 py-2 text-sm font-bold"><Save className="size-4" aria-hidden="true" /> حفظ العرض</button>}
+    </div>
+    {view === 'list' ? <div className="mx-auto grid max-w-7xl px-5 py-5 lg:grid-cols-[350px_1fr]">
       <aside className="divide-y border bg-white">{snapshot.tasks.map((task) => <button key={task.id} onClick={() => setSelectedId(task.id)} aria-current={task.id === selectedId ? 'true' : undefined} className="block w-full px-4 py-4 text-right hover:bg-gray-50 aria-[current=true]:bg-teal-50"><span className="block font-bold">{task.title}</span><span className="mt-1 block text-xs text-gray-500">{task.projectName} · {statusLabel[task.status]} · {priorityLabel[task.priority]}</span></button>)}{snapshot.tasks.length === 0 && <p className="p-8 text-center text-gray-500">لا توجد مهام ضمن نطاقك.</p>}</aside>
       <section className="border border-r-0 bg-white p-6">{!selected ? <div className="grid min-h-72 place-items-center text-gray-500">اختر مهمة.</div> : <TaskDetails task={selected} canEdit={snapshot.capabilities.update} onEdit={() => setEditor('edit')} />}</section>
-    </div>
+    </div> : <TaskAlternateView view={view} tasks={snapshot.tasks} />}
     {editor && <TaskEditor mode={editor} snapshot={snapshot} task={editor === 'edit' ? selected : null} onClose={() => setEditor(null)} onSubmit={async (input) => {
       if (editor === 'create') await client.create(organizationId, input)
       else if (selected) await client.update(organizationId, {
@@ -49,6 +65,17 @@ export function TaskManagementScreen({ organizationId, client }: { organizationI
       setEditor(null); await load()
     }} />}
   </main>
+}
+
+function TaskAlternateView({ view, tasks }: { view: Exclude<TaskView, 'list'>; tasks: readonly TaskSummary[] }) {
+  if (tasks.length === 0) return <section dir="rtl" className="mx-auto max-w-7xl px-5 py-5"><div className="border bg-white p-10 text-center text-gray-500">لا توجد مهام لهذا العرض.</div></section>
+  if (view === 'board') {
+    const groups = ['ready', 'in_progress', 'blocked', 'in_review', 'completed'] as const
+    return <section aria-label="لوحة المهام" className="mx-auto grid max-w-7xl gap-3 overflow-x-auto px-5 py-5 md:grid-cols-5">{groups.map((status) => <div key={status} className="min-w-52 border bg-white p-3"><h2 className="mb-3 text-sm font-black">{statusLabel[status]}</h2><div className="space-y-2">{tasks.filter((task) => task.status === status).map((task) => <article key={task.id} className="border p-3 text-sm"><p className="font-bold">{task.title}</p><p className="mt-1 text-xs text-gray-500">{task.projectName}</p></article>)}</div></div>)}</section>
+  }
+  const sorted = [...tasks].filter(({ dueAt }) => dueAt).sort((a, b) => String(a.dueAt).localeCompare(String(b.dueAt)))
+  if (view === 'calendar') return <section aria-label="تقويم المهام" className="mx-auto max-w-7xl px-5 py-5"><div className="divide-y border bg-white">{sorted.map((task) => <article key={task.id} className="grid gap-2 p-4 sm:grid-cols-[180px_1fr]"><time dir="ltr">{task.dueAt?.slice(0, 10)}</time><div><h2 className="font-bold">{task.title}</h2><p className="text-xs text-gray-500">{task.projectName}</p></div></article>)}</div></section>
+  return <section aria-label="الخط الزمني للمهام" className="mx-auto max-w-7xl px-5 py-5"><ol className="border bg-white p-5">{sorted.map((task, index) => <li key={task.id} className="relative border-r-2 border-teal-700 py-4 pr-6"><span className="absolute -right-2 top-5 size-3 rounded-full bg-teal-700" aria-hidden="true" /><p className="text-xs text-gray-500">{index + 1} · {task.dueAt?.slice(0, 10)}</p><h2 className="font-bold">{task.title}</h2></li>)}</ol></section>
 }
 
 function TaskDetails({ task, canEdit, onEdit }: { task: TaskSummary; canEdit: boolean; onEdit: () => void }) {
@@ -84,6 +111,13 @@ function TaskEditor({ mode, snapshot, task, onClose, onSubmit }: {
 
 export function TaskManagementPage() {
   const { organizationId } = useTenant()
+  const [params, setParams] = useSearchParams()
+  const rawView = params.get('view')
+  const view: TaskView = rawView === 'board' || rawView === 'calendar' || rawView === 'timeline' ? rawView : 'list'
   if (!organizationId) return <main dir="rtl" className="grid min-h-screen place-items-center">لا توجد عضوية مؤسسة نشطة.</main>
-  return <TaskManagementScreen organizationId={organizationId} client={taskClient} />
+  return <TaskManagementScreen organizationId={organizationId} client={taskClient} view={view} onViewChange={(next) => {
+    const updated = new URLSearchParams(params)
+    updated.set('view', next)
+    setParams(updated, { replace: true })
+  }} />
 }
