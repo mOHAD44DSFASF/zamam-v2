@@ -26,5 +26,7 @@
 | P7 | RTL UI/accessibility | hierarchy، capability feedback، empty state، create command flow، axe | 3 pass |
 | P8 | employee lifecycle | invitation/compensation، last Owner، session revoke، multi-tenant identity، departure cleanup، schedules/PII | 9 pass |
 | P8 | RTL UI/accessibility | sanitized directory، invite without role، sensitive disable confirmation، axe | 3 pass |
+| P9 | client lifecycle/security | tenant isolation، AES-GCM/HMAC، no portal grant، eligibility/revoke/archive، projections | 7 pass |
+| P9 | RTL UI/accessibility | list/detail، contact without invitation، separate eligibility، axe | 3 pass |
 
 يُوسّع الجدول عند بدء كل Prompt، ولا يُعتبر Prompt مكتملاً دون evidence قابل للتكرار.

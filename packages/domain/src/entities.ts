@@ -20,8 +20,8 @@ export interface PermissionDefinition extends TenantEntity { key: string; descri
 export interface RoleAssignment extends TenantEntity { userId: string; roleId: string; scopeType: string; scopeId: string; effect: 'grant' | 'deny'; status: 'active' | 'revoked'; startsAt?: UtcIsoString; expiresAt?: UtcIsoString }
 export interface TeamMembership extends TenantEntity { teamId: string; userId: string; membershipRole: 'leader' | 'member'; isPrimary: boolean; allocationPercent?: number; status: 'active' | 'ended' }
 
-export interface Client extends TenantEntity, ArchiveFields { name: string; code: string; status: ClientStatus; accountManagerUserId?: string }
-export interface ClientContact extends TenantEntity { clientId: string; name: string; email: string; portalStatus: 'none' | 'invited' | 'active' | 'disabled'; userId?: string }
+export interface Client extends TenantEntity, ArchiveFields { name: string; code: string; industry?: string; status: ClientStatus; accountManagerUserId?: string }
+export interface ClientContact extends TenantEntity { clientId: string; name: string; emailHash: string; emailCiphertext: string; encryptionKeyVersion: string; portalStatus: 'none' | 'eligible' | 'invited' | 'active' | 'disabled'; clientAdmin: boolean; userId?: string }
 export interface Project extends TenantEntity, ArchiveFields { clientId: string; name: string; code: string; status: ProjectStatus; departmentId?: string; managerUserId: string; startsOn?: string; dueOn?: string }
 export interface ProjectMember extends TenantEntity { projectId: string; userId: string; access: 'viewer' | 'contributor' | 'manager'; status: 'active' | 'ended' }
 export interface Workspace extends TenantEntity, ArchiveFields { projectId?: string; name: string; status: WorkspaceStatus; visibility: 'private' | 'team' | 'project' }

@@ -17,7 +17,14 @@ export interface OutboxPublisher {
   publish(event: OutboxEvent): Promise<void>
 }
 
-export type SecretName = 'R2_ACCESS_KEY_ID' | 'R2_SECRET_ACCESS_KEY' | 'OPENAI_API_KEY' | 'EMAIL_PROVIDER_API_KEY'
+export type SecretName =
+  | 'R2_ACCESS_KEY_ID'
+  | 'R2_SECRET_ACCESS_KEY'
+  | 'OPENAI_API_KEY'
+  | 'EMAIL_PROVIDER_API_KEY'
+  | 'CLIENT_PII_ENCRYPTION_KEY'
+  | 'CLIENT_PII_HASH_KEY'
+  | 'CLIENT_PII_KEY_VERSION'
 
 export interface SecretProvider {
   get(name: SecretName): Promise<string>
