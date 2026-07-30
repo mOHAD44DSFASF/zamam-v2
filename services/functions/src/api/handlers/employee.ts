@@ -1,10 +1,33 @@
 import { tenantCollectionPath } from '@zamam/firestore'
-import { EmployeeService, type EmployeeLifecyclePort } from '../../employee/service.js'
+import { EmployeeService, type EmployeeLifecyclePort, type InvitationLookupPort } from '../../employee/service.js'
 import { FirebaseEmployeeIdentityAdapter } from '../../employee/firebase-identity.js'
 import type { Deps } from '../deps.js'
 import { orgPath, readDoc } from '../deps.js'
 import type { HandlerRegistry } from '../registry.js'
 import { requireNumber, requireString } from '../registry.js'
+
+function createInvitationLookupPort(deps: Deps): InvitationLookupPort {
+  return {
+    // Matches regardless of status/expiry — EmployeeService.acceptInvitation re-reads the record
+    // authoritatively and distinguishes INVITATION_ALREADY_USED / INVITATION_EXPIRED / TOKEN_INVALID
+    // itself, so those stay distinct, actionable error codes instead of one generic "not found".
+    async findByTokenHash(tokenHash) {
+      const snapshot = await deps.firestore.collectionGroup('invitation')
+        .where('tokenHash', '==', tokenHash).limit(1).get()
+      const doc = snapshot.docs[0]
+      if (!doc) return null
+      const organizationId = String(doc.data().organizationId ?? '')
+      if (!organizationId) return null
+      return { organizationId, invitationId: doc.id }
+    },
+  }
+}
+
+/** Shared with handlers/auth.ts, whose accept-invitation flow has no organization context yet and needs
+ * the same EmployeeService instance/wiring rather than a second, divergent construction. */
+export function createEmployeeService(deps: Deps): EmployeeService {
+  return new EmployeeService(deps.store, deps.authorization, new FirebaseEmployeeIdentityAdapter(), createLifecyclePort(deps), createInvitationLookupPort(deps))
+}
 
 function createLifecyclePort(deps: Deps): EmployeeLifecyclePort {
   return {
@@ -40,9 +63,7 @@ function createLifecyclePort(deps: Deps): EmployeeLifecyclePort {
 }
 
 export function createEmployeeHandlers(deps: Deps): HandlerRegistry {
-  const identities = new FirebaseEmployeeIdentityAdapter()
-  const lifecycle = createLifecyclePort(deps)
-  const service = new EmployeeService(deps.store, deps.authorization, identities, lifecycle)
+  const service = createEmployeeService(deps)
 
   const metadata = (context: { organizationId: string; principal: unknown; correlationId: string; idempotencyKey: string; fingerprint: string }) => ({
     organizationId: context.organizationId, principal: context.principal as Parameters<typeof service.invite>[0]['principal'],

@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { AuthorizationPrincipal, AuthorizationRequest, Permission } from '@zamam/authorization'
 import {
   SCHEMA_VERSION,
@@ -34,6 +34,12 @@ const inviteSchema = z.object({
   timezone: z.string().min(1).max(64),
 }).strict()
 
+const acceptInvitationSchema = z.object({
+  invitationToken: z.string().regex(/^[A-Za-z0-9_-]{32,512}$/),
+  password: z.string().min(12).max(128),
+  idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{8,128}$/),
+}).strict()
+
 const scheduleSchema = z.object({
   userId: idSchema,
   timezone: z.string().min(1).max(64),
@@ -65,6 +71,17 @@ export interface EmployeeIdentityPort {
   compensateInvitation(userId: string, idempotencyKey: string): Promise<void>
   disableIdentity(userId: string): Promise<void>
   revokeRefreshTokens(userId: string): Promise<void>
+  setPassword(userId: string, password: string): Promise<void>
+}
+
+/**
+ * Locates a pending invitation by its token hash without knowing which organization it belongs to (the
+ * public accept endpoint only receives the token) — same "resolve across all tenants by a system field,
+ * then re-verify authoritatively inside the transaction" pattern already used for
+ * hasOtherActiveMemberships (a collectionGroup lookup), not a new one.
+ */
+export interface InvitationLookupPort {
+  findByTokenHash(tokenHash: string): Promise<{ organizationId: string; invitationId: string } | null>
 }
 
 export type EmployeeAccessReference = {
@@ -109,6 +126,12 @@ const numeric = (value: unknown) => {
   return number
 }
 
+const assertTokenMatches = (record: StoredDocument, tokenHash: string) => {
+  const stored = Buffer.from(String(record.tokenHash ?? ''), 'hex')
+  const provided = Buffer.from(tokenHash, 'hex')
+  if (stored.length !== provided.length || !timingSafeEqual(stored, provided)) throw new Error('INVITATION_TOKEN_INVALID')
+}
+
 export class EmployeeService {
   private readonly audit: AuditCommandService
 
@@ -117,6 +140,7 @@ export class EmployeeService {
     private readonly authorization: EmployeeAuthorizationGate,
     private readonly identities: EmployeeIdentityPort,
     private readonly lifecycle: EmployeeLifecyclePort,
+    private readonly invitations: InvitationLookupPort,
     audit?: AuditCommandService,
   ) {
     this.audit = audit ?? new AuditCommandService(store)
@@ -166,6 +190,11 @@ export class EmployeeService {
     idSchema.parse(identity.userId)
     const emailHash = createHash('sha256').update(input.email).digest('hex')
     const invitationId = stableId('invite', `${identity.userId}:${metadata.organizationId}`)
+    // Same secure-token convention as password reset / R2 signed URLs: never persist the bearer secret
+    // itself, only its SHA-256 hash; the plaintext is handed back once, here, for the inviter to deliver
+    // (there is no outbound email adapter wired to production credentials yet).
+    const invitationToken = randomBytes(32).toString('base64url')
+    const tokenHash = createHash('sha256').update(invitationToken).digest('hex')
     try {
       return await this.audit.execute(context, async (transaction) => {
         const department = await readOwned(
@@ -206,6 +235,7 @@ export class EmployeeService {
           ...baseRecord(metadata.organizationId),
           userId: identity.userId,
           emailHash,
+          tokenHash,
           status: 'pending',
           expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString(),
         })
@@ -215,7 +245,7 @@ export class EmployeeService {
           ...baseRecord(metadata.organizationId), state: 'invited', userId: identity.userId,
         })
         return {
-          result: { userId: identity.userId, invitationId, membershipStatus: 'invited' as const },
+          result: { userId: identity.userId, invitationId, invitationToken, membershipStatus: 'invited' as const },
           resourceType: 'organization_membership',
           resourceId: identity.userId,
           outbox: {
@@ -229,6 +259,81 @@ export class EmployeeService {
       if (identity.created) await this.identities.compensateInvitation(identity.userId, metadata.idempotencyKey)
       throw error
     }
+  }
+
+  /**
+   * Self-service counterpart to invite(): authenticated by token possession (the caller has no Firebase
+   * session yet), not by AuthorizationPrincipal/RBAC — the token itself is the credential, verified the
+   * same way every other secret in this codebase is (SHA-256 hash comparison, never storing or logging
+   * the plaintext) with a constant-time comparison since this path is reachable pre-authentication.
+   */
+  async acceptInvitation(input: {
+    invitationToken: string
+    password: string
+    idempotencyKey: string
+    correlationId: string
+  }) {
+    const parsed = acceptInvitationSchema.parse({
+      invitationToken: input.invitationToken, password: input.password, idempotencyKey: input.idempotencyKey,
+    })
+    const tokenHash = createHash('sha256').update(parsed.invitationToken).digest('hex')
+    const located = await this.invitations.findByTokenHash(tokenHash)
+    if (!located) throw new Error('INVITATION_TOKEN_INVALID')
+    const invitationPath = tenantDocumentPath(located.organizationId, 'invitation', located.invitationId)
+    const preSnapshot = await this.store.runTransaction((transaction) => transaction.get(invitationPath))
+    if (!preSnapshot) throw new Error('INVITATION_TOKEN_INVALID')
+    assertTokenMatches(preSnapshot, tokenHash)
+    if (preSnapshot.status !== 'pending') throw new Error('INVITATION_ALREADY_USED')
+    if (Date.parse(String(preSnapshot.expiresAt)) <= Date.now()) throw new Error('INVITATION_EXPIRED')
+    const userId = String(preSnapshot.userId)
+    idSchema.parse(userId)
+
+    const fingerprint = createHash('sha256').update(`${tokenHash}:${parsed.password}`).digest('hex')
+    const context = {
+      organizationId: located.organizationId,
+      actorUserId: userId,
+      permission: 'membership.manage' as const,
+      correlationId: input.correlationId,
+      idempotencyKey: parsed.idempotencyKey,
+      fingerprint,
+    }
+    const replay = await this.audit.replay<{ userId: string; membershipStatus: 'active' }>(context)
+    if (replay) return replay
+
+    await this.identities.setPassword(userId, parsed.password)
+
+    return this.audit.execute(context, async (transaction) => {
+      const invitation = await readOwned(transaction, invitationPath, located.organizationId)
+      assertTokenMatches(invitation, tokenHash)
+      if (invitation.userId !== userId) throw new Error('INVITATION_TOKEN_INVALID')
+      if (invitation.status !== 'pending') throw new Error('INVITATION_ALREADY_USED')
+      if (Date.parse(String(invitation.expiresAt)) <= Date.now()) throw new Error('INVITATION_EXPIRED')
+      const membershipPath = tenantDocumentPath(located.organizationId, 'organization_membership', userId)
+      const membership = await readOwned(transaction, membershipPath, located.organizationId)
+      if (membership.status !== 'invited') throw new Error('MEMBERSHIP_NOT_INVITED')
+      const employmentPath = tenantDocumentPath(located.organizationId, 'employment_profile', userId)
+      const employment = await readOwned(transaction, employmentPath, located.organizationId)
+      transaction.update(invitationPath, {
+        status: 'accepted', acceptedAt: SERVER_TIMESTAMP,
+        version: numeric(invitation.version) + 1, updatedAt: SERVER_TIMESTAMP,
+      })
+      transaction.update(membershipPath, {
+        status: 'active', joinedAt: SERVER_TIMESTAMP,
+        version: numeric(membership.version) + 1, updatedAt: SERVER_TIMESTAMP,
+      })
+      transaction.update(employmentPath, {
+        status: 'active', version: numeric(employment.version) + 1, updatedAt: SERVER_TIMESTAMP,
+      })
+      const statePath = systemPath(located.organizationId, '_userAccessState', userId)
+      const state = await transaction.get(statePath)
+      if (state) transaction.update(statePath, { state: 'active', version: numeric(state.version) + 1, updatedAt: SERVER_TIMESTAMP })
+      return {
+        result: { userId, membershipStatus: 'active' as const },
+        resourceType: 'organization_membership',
+        resourceId: userId,
+        outbox: { type: 'user.activated', version: 1, payload: { userId, organizationId: located.organizationId } },
+      }
+    })
   }
 
   async activateInvitation(metadata: EmployeeCommandMetadata, userId: string, expectedMembershipVersion: number) {

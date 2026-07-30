@@ -13,7 +13,7 @@ export interface Team extends TenantEntity, ArchiveFields { name: string; code: 
 export interface UserIdentity extends GlobalEntity { email: string; accountStatus: UserAccountStatus; tokensValidAfter: UtcIsoString }
 export interface UserProfile extends TenantEntity { userId: string; displayName: string; firstName: string; locale: 'ar' | 'en'; timezone: string; avatarFileId?: string }
 export interface OrganizationMember extends TenantEntity { userId: string; status: 'invited' | 'active' | 'suspended' | 'left'; invitedAt: UtcIsoString; joinedAt?: UtcIsoString; leftAt?: UtcIsoString }
-export interface Invitation extends TenantEntity { userId: string; emailHash: string; status: 'pending' | 'accepted' | 'expired' | 'cancelled' | 'failed'; expiresAt: UtcIsoString; acceptedAt?: UtcIsoString }
+export interface Invitation extends TenantEntity { userId: string; emailHash: string; tokenHash: string; status: 'pending' | 'accepted' | 'expired' | 'cancelled' | 'failed'; expiresAt: UtcIsoString; acceptedAt?: UtcIsoString }
 export interface EmploymentProfile extends TenantEntity, ArchiveFields { userId: string; employeeNumber: string; employmentType: 'employee' | 'contractor'; primaryDepartmentId: string; jobTitle: string; managerUserId?: string; workScheduleId?: string; status: EmploymentStatus; startDate: string; endDate?: string; endReason?: string }
 export interface Role extends TenantEntity, ArchiveFields { name: string; permissions: readonly string[]; policyVersion: number; status: 'active' | 'archived' }
 export interface PermissionDefinition extends TenantEntity { key: string; description: string; sensitivity: 'low' | 'medium' | 'high' | 'critical' }

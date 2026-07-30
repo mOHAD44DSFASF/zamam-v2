@@ -42,4 +42,8 @@ export class FirebaseEmployeeIdentityAdapter implements EmployeeIdentityPort {
   async revokeRefreshTokens(userId: string) {
     await this.auth.revokeRefreshTokens(userId)
   }
+
+  async setPassword(userId: string, password: string) {
+    await this.auth.updateUser(userId, { password, emailVerified: true })
+  }
 }
