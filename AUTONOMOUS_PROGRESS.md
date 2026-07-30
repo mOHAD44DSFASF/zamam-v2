@@ -8,8 +8,9 @@
 | P2 Repository restructuring | Complete | checkpoint `218878d`؛ npm workspaces، web boundary، 10 tests؛ جميع الفحوص خضراء |
 | P3 Authentication foundation | Complete | fail-closed guards، session read model، invite/reset adapters، 11 auth tests، browser evidence |
 | P4 Trusted backend foundation | Complete | Functions adapter، transport-neutral API، idempotency/outbox ports، worker retry/dead-letter، runtime import smoke |
-| P5 Permission and authorization | In progress | catalog/scopes/deny algorithm وpolicy tests قيد التنفيذ |
-| P6-P28 | Pending | تُنفذ بالتسلسل بعد P5 |
+| P5 Permission and authorization | Complete | 162-permission catalog، scoped engine، default/custom roles، anti-escalation، recursive client-write deny |
+| P6 V2 schema/converters/audit | In progress | canonical timestamps، converters، repositories، transactional audit/outbox، migration versioning |
+| P7-P28 | Pending | تُنفذ بالتسلسل بعد Gate P6 |
 
 ## Baseline recovery
 

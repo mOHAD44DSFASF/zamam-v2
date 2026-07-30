@@ -13,7 +13,9 @@
 | P4 | contract/local integration | envelope، validation، auth/App Check، CORS، idempotency، outbox | 7 pass |
 | P4 | unit | redaction، worker completion/retry/dead-letter | 3 pass |
 | P4 | runtime smoke | compiled Functions/worker imports + `/health` | pass |
-| P5 | policy matrix/property tests | tenant and resource authorization | pending |
+| P5 | policy matrix | 10 roles cross-tenant + disabled، scope/deny/client/platform/step-up | 47 pass |
+| P5 | service/static rules | role assignment anti-escalation/version/audit + Firestore default deny | 5 pass |
+| P5 | runtime smoke | compiled authorization catalog/defaults/legacy mapping | pass |
 | P6 | converter/emulator/audit tests | canonical schema and outbox | pending |
 
 يُوسّع الجدول عند بدء كل Prompt، ولا يُعتبر Prompt مكتملاً دون evidence قابل للتكرار.

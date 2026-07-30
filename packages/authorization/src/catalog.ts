@@ -1,0 +1,53 @@
+export const PERMISSIONS = [
+  'organization.view', 'organization.manage', 'organization.suspend',
+  'settings.view', 'settings.manage', 'security.policy.view', 'security.policy.manage',
+  'audit.view', 'audit.export', 'support.access.grant',
+  'department.view', 'department.create', 'department.manage', 'department.archive',
+  'team.view', 'team.create', 'team.manage', 'team.archive',
+  'user.view', 'user.invite', 'user.update', 'user.disable', 'user.restore',
+  'employment.view', 'employment.manage', 'employment.compensation.view',
+  'role.view', 'role.manage', 'role.assign', 'membership.view', 'membership.manage',
+  'work_schedule.view', 'work_schedule.manage',
+  'client.view', 'client.create', 'client.manage', 'client.archive', 'client.contact.manage', 'client.financial.view',
+  'project.view', 'project.create', 'project.manage', 'project.archive', 'project.reopen',
+  'project.member.manage', 'project.financial.view', 'project.financial.manage',
+  'workspace.view', 'workspace.create', 'workspace.manage', 'workspace.archive', 'workspace.member.manage',
+  'task.view', 'task.view_all', 'task.create', 'task.update', 'task.archive', 'task.delete',
+  'task.assign', 'task.reassign', 'task.claim', 'task.transition', 'task.override_transition',
+  'task.reopen', 'task.approve', 'task.bulk_manage', 'subtask.manage',
+  'checklist.update', 'checklist.override',
+  'workflow.view', 'workflow.create', 'workflow.manage', 'workflow.publish', 'workflow.archive', 'workflow.migrate_instances',
+  'review.request', 'review.perform', 'review.cancel', 'approval.delegate',
+  'change_request.create', 'change_request.resolve',
+  'comment.internal.view', 'comment.internal.create', 'comment.internal.update', 'comment.internal.delete',
+  'comment.client.view', 'comment.client.create', 'comment.client.update', 'comment.client.delete',
+  'mention.create', 'file.view', 'file.upload', 'file.download', 'file.version', 'file.delete', 'file.restore',
+  'file.internal.view', 'file.client.share', 'tag.view', 'tag.manage',
+  'saved_view.create', 'saved_view.share', 'saved_view.manage', 'custom_field.view', 'custom_field.manage',
+  'time.track', 'time.view_self', 'time.view_team', 'time.adjust',
+  'timesheet.submit', 'timesheet.approve', 'timesheet.unlock',
+  'workload.view_self', 'workload.view_team', 'workload.view_organization', 'workload.manage',
+  'attendance.view_self', 'attendance.view_team', 'attendance.record', 'attendance.manage',
+  'leave.view_self', 'leave.request', 'leave.view_team', 'leave.approve', 'leave.manage',
+  'goal.view', 'goal.manage', 'kpi.view_self', 'kpi.view_team', 'kpi.view_organization', 'kpi.manage',
+  'report.view_self', 'report.view_team', 'report.view_department', 'report.view_organization',
+  'report.export', 'performance.sensitive.view',
+  'notification.view', 'notification.manage_preferences', 'notification.admin_retry',
+  'automation.view', 'automation.create', 'automation.manage', 'automation.publish', 'automation.execute', 'automation.cancel',
+  'ai.use', 'ai.view_history', 'ai.action.approve', 'ai.policy.manage',
+  'integration.view', 'integration.manage', 'integration.credential.rotate',
+  'webhook.view', 'webhook.manage', 'webhook.replay', 'search.use', 'search.admin',
+  'platform.health.view', 'platform.tenant.provision', 'platform.tenant.support', 'platform.incident.manage',
+] as const
+
+export type Permission = typeof PERMISSIONS[number]
+const permissionSet: ReadonlySet<string> = new Set(PERMISSIONS)
+export const isPermission = (value: string): value is Permission => permissionSet.has(value)
+
+export const SENSITIVE_PERMISSIONS: ReadonlySet<Permission> = new Set([
+  'organization.manage', 'organization.suspend', 'security.policy.manage', 'audit.export',
+  'support.access.grant', 'user.disable', 'role.manage', 'role.assign', 'task.delete',
+  'task.override_transition', 'task.reopen', 'task.approve', 'file.client.share',
+  'report.export', 'automation.publish', 'ai.action.approve', 'ai.policy.manage',
+  'integration.credential.rotate', 'platform.tenant.provision', 'platform.tenant.support', 'platform.incident.manage',
+])

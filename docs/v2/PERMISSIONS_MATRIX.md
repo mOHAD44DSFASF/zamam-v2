@@ -1,5 +1,7 @@
 # نظام الصلاحيات لـZAMAM V2
 
+> **حالة التنفيذ (P5):** catalog والـ scoped deny-by-default engine والخدمة الموثوقة منفذة في `packages/authorization` و`services/functions/src/authorization`. راجع `AUTHORIZATION_IMPLEMENTATION.md`. التخزين الدائم يبدأ في P6.
+
 > **Proposed V2.** النموذج يجمع RBAC مع scopes وخصائص المورد. إخفاء UI ليس authorization، وكل privileged command يعاد تقييمه في trusted backend.
 
 ## 1. نموذج التفويض
@@ -242,13 +244,12 @@
 
 | V1 role | Confirmed V1 | V2 mapping المقترح | uncertainty |
 |---|---|---|---|
-| `Admin` | route إلى Admin وfull UI غالباً | `Owner` أو `GeneralManager` | **OD-ROL-01** يحدد هل هو مالك أم مدير |
-| `DeputyManager` | full workspaces/tasks تقريباً | `DeputyManager` organization scope | delegation/governance غير مؤكدة |
-| `Manager` | UI إدارة مقيد ومساحات يشرف عليها | `DepartmentManager`, `TeamLeader` أو `Supervisor` scoped | **OD-ROL-02** |
+| `Admin` | route إلى Admin وfull UI غالباً | migration preview إلى `GeneralManager` فقط؛ لا `Owner` | حُسم في Master Goal؛ أول Owner عبر secure bootstrap |
+| `DeputyManager` | full workspaces/tasks تقريباً | `DeputyManager` بعد حل scope ومدة delegation | لا grants قبل resolution |
+| `Manager` | UI إدارة مقيد ومساحات يشرف عليها | quarantine حتى تحديد `DepartmentManager`, `TeamLeader` أو `Supervisor` scoped | حُسم منع privilege الافتراضي |
 | `Reviewer` | pipeline actor label | permission set `review.perform`, لا يلزم system role | نطاقه غير مؤكد |
 | `Uploader` | pipeline actor | custom operational role + file permissions | هل يرى client delivery؟ **OD-ROL-03** |
 | `Creator` | default employee/pipeline actor | `Employee` + task executor | الاسم التجاري الدقيق غير مؤكد |
 | dynamic role | Firestore role doc | custom Role؛ migrate name + inferred permissions بعد owner review | لا يمكن استنتاج permissions من الاسم |
 
 لا migration تمنح V2 permissions تلقائياً بناءً على النص وحده. كل mapping ينتج review report وexplicit approval.
-
