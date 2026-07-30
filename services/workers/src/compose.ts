@@ -12,6 +12,8 @@ import { createFirestoreNotificationAudiencePort, createFirestoreNotificationPre
 import { createFirestoreNotificationDeliveryStore } from './platform/notification-delivery-store.js'
 import { createNotificationRecipientDirectory } from './platform/notification-directory.js'
 import { createFirestoreReportExportPort } from './platform/report-export-port.js'
+import { LocalPrivateStorage, S3CompatiblePrivateStorage, type PrivateObjectStorage } from './platform/storage.js'
+import { R2SigV4Signer } from './platform/r2-signer.js'
 import { assertProductionTransportConfigured, DisabledWorkerTransportPublisher, LocalWorkerTransportPublisher, PubSubWorkerTransportPublisher, type TransportEnv, type WorkerTransportEnvelope, type WorkerTransportPublisher } from './transport.js'
 
 export interface WorkerEnv extends TransportEnv {
@@ -20,6 +22,10 @@ export interface WorkerEnv extends TransportEnv {
   EMAIL_FROM_ADDRESS?: string
   WORKER_INTERNAL_SHARED_SECRET?: string
   MALWARE_SCANNER_PROVIDER?: string
+  R2_ACCOUNT_ID?: string
+  R2_BUCKET_NAME?: string
+  R2_ACCESS_KEY_ID?: string
+  R2_SECRET_ACCESS_KEY?: string
 }
 
 export interface WorkerRuntime {
@@ -46,6 +52,16 @@ function createAiProvider(): AIProvider {
   return new DisabledAIProvider()
 }
 
+// Mirrors services/functions/src/api/compose.ts's createStorage() — same env vars, same adapter classes
+// (moved to @zamam/workers in this change so both functions and workers share one implementation).
+function createStorage(env: WorkerEnv): PrivateObjectStorage {
+  const { R2_ACCOUNT_ID: accountId, R2_BUCKET_NAME: bucketName, R2_ACCESS_KEY_ID: accessKeyId, R2_SECRET_ACCESS_KEY: secretAccessKey } = env
+  if (accountId && bucketName && accessKeyId && secretAccessKey) {
+    return new S3CompatiblePrivateStorage('r2', new R2SigV4Signer({ accountId, bucketName, accessKeyId, secretAccessKey }), true)
+  }
+  return new LocalPrivateStorage()
+}
+
 function createTransport(env: WorkerEnv, onLocalMessage?: (envelope: WorkerTransportEnvelope) => Promise<void>): WorkerTransportPublisher {
   assertProductionTransportConfigured(env)
   const provider = env.WORKER_TRANSPORT_PROVIDER ?? (env.WORKER_PUBSUB_TOPIC ? 'pubsub' : 'local')
@@ -68,7 +84,7 @@ export function composeWorkerRuntime(firestore: Firestore, env: WorkerEnv, onLoc
     filePurgeCommands: createFilePurgeCommandPort(firestore),
     aiProvider: createAiProvider(),
     aiResults: createFirestoreAiResultPort(firestore),
-    reportExport: createFirestoreReportExportPort(firestore),
+    reportExport: createFirestoreReportExportPort(firestore, createStorage(env)),
     notificationAudiences: createFirestoreNotificationAudiencePort(firestore),
     notificationPreferences: createFirestoreNotificationPreferencePort(firestore),
     notificationClock: { now: () => now().toISOString() },

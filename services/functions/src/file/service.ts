@@ -8,7 +8,7 @@ import {
 } from '@zamam/firestore'
 import { z } from 'zod'
 import { AuditCommandService } from '../audit/service.js'
-import type { PrivateObjectStorage } from './storage.js'
+import type { PrivateObjectStorage } from '@zamam/workers'
 
 const id = z.string().regex(/^[A-Za-z0-9_-]{2,128}$/)
 const version = z.number().int().positive()

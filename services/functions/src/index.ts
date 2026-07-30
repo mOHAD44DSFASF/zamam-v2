@@ -20,9 +20,12 @@ export * from './workflow/execution-service.js'
 export * from './review/service.js'
 export * from './template/service.js'
 export * from './collaboration/service.js'
-export * from './file/storage.js'
 export * from './file/service.js'
-export * from './file/r2-signer.js'
+export {
+  LocalPrivateStorage, S3CompatiblePrivateStorage, R2SigV4Signer,
+  type PrivateObjectStorage, type UploadGrant, type DownloadGrant,
+  type StoredObjectMetadata, type S3CompatibleSigner, type R2SignerConfig,
+} from '@zamam/workers'
 export * from './notification/service.js'
 export * from './workload/service.js'
 export * from './time/service.js'

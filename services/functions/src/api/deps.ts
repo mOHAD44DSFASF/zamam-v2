@@ -3,7 +3,7 @@ import { tenantCollectionPath, tenantDocumentPath, type AtomicStore, type PageQu
 import type { AuthorizationPrincipal, AuthorizationRequest, ResourceAuthorizationContext } from '@zamam/authorization'
 import type { TenantEntityKind } from '@zamam/domain'
 import type { TrustedAuthorizationService } from '../authorization/service.js'
-import type { PrivateObjectStorage } from '../file/storage.js'
+import type { PrivateObjectStorage } from '@zamam/workers'
 
 export interface Gate {
   require(principal: AuthorizationPrincipal, request: AuthorizationRequest): Promise<unknown>
