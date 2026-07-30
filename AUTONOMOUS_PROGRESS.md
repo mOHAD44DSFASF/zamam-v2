@@ -7,7 +7,8 @@
 - Prompt 13 Task views and saved filters: **Complete**. Scoped bounded query planner, assignment resolution, search boundary, audited saved views, and URL-preserved list/board/calendar/timeline.
 - Prompt 14 Workflow builder: **Complete**. Declarative graph validation/simulation, versioned immutable publication with step-up, atomic records, and accessible RTL builder.
 - Prompt 15 Workflow execution engine: **Complete**. Pinned instances, exactly-once guarded transitions, full stage history, rework cycles, SLA breach scan, compatible migrations, and task UI commands.
-- Prompt 16 Reviews and approvals: **In progress**. Immutable review evidence, any/all/ordered policies, changes/reject/resubmit/delegate/expire.
+- Prompt 16 Reviews and approvals: **Complete**. Version-pinned immutable evidence, single/any/all/ordered policies, stale rejection, changes/resubmit, delegation, expiry, client boundary, RTL inbox.
+- Prompt 17 Templates and recurring work: **In progress**. Versioned task/project templates, timezone recurrence, one logical run per occurrence, pause/catch-up controls.
 
 آخر تحديث: 2026-07-30
 

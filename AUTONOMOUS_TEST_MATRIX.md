@@ -1,6 +1,6 @@
 # Autonomous Test Matrix
 
-Latest additions: P15 workflow execution pin/race/replay/gates/rework/migration/SLA 9 passed; pinned workflow transition UI assertion added.
+Latest additions: P16 review/approval policies and lifecycle 9 passed; RTL review inbox accessibility/decision 2 passed.
 
 | Prompt | المستوى | النطاق | الحالة |
 |---:|---|---|---|
