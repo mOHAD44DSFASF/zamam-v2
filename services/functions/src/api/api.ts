@@ -58,6 +58,20 @@ function json<T>(status: number, payload: ApiEnvelope<T>, headers: HeadersInit =
   })
 }
 
+/**
+ * Local emulator only: if nobody set ZAMAM_ALLOWED_ORIGINS (e.g. no services/functions/.env present),
+ * fall back to the Vite dev server's default origins rather than denying every request outright — mirrors
+ * the FUNCTIONS_EMULATOR-gated app-check bypass in firebase-adapter.ts. Never applies to deployed Cloud
+ * Functions, since FUNCTIONS_EMULATOR is only ever set by the emulator itself.
+ */
+export const DEFAULT_LOCAL_EMULATOR_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:5173']
+
+export function resolveAllowedOrigins(env: Record<string, string | undefined>): ReadonlySet<string> {
+  const configured = (env.ZAMAM_ALLOWED_ORIGINS ?? '').split(',').map((origin) => origin.trim()).filter(Boolean)
+  if (configured.length > 0) return new Set(configured)
+  return new Set(env.FUNCTIONS_EMULATOR === 'true' ? DEFAULT_LOCAL_EMULATOR_ORIGINS : [])
+}
+
 function corsHeaders(request: Request, allowedOrigins: ReadonlySet<string>) {
   const origin = request.headers.get('origin')
   if (!origin) return {}

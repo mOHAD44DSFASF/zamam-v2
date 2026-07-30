@@ -61,6 +61,17 @@ On success it prints a JSON summary including `userId`, `roleAssignmentId`, and 
 specific run actually performed (`actionsPerformedThisRun: []` on a second run means it was already
 fully bootstrapped — nothing was duplicated).
 
+## CORS and the web app talking to the Functions emulator
+
+`services/functions/src/api/api.ts`'s CORS allowlist comes from `ZAMAM_ALLOWED_ORIGINS` (see
+`services/functions/.env.example`). If you never created a `services/functions/.env` — and note that
+`npm run package:functions` doesn't copy `.env` files into `.artifacts/functions`, so placing one there
+gets silently wiped on every repackage — `resolveAllowedOrigins()` (`services/functions/src/api/api.ts`)
+falls back to `http://localhost:5173` and `http://127.0.0.1:5173` automatically, but **only** when
+`FUNCTIONS_EMULATOR=true` (i.e. only inside the local emulator; this can never affect a deployed Cloud
+Function). If the web app's origin/port ever differs from those two, requests to `/v1/*` will fail with a
+CORS preflight error in the browser console — set `ZAMAM_ALLOWED_ORIGINS` explicitly in that case.
+
 ## Running the workers service locally
 
 `createWorkerHttpHandler()` (`services/workers/src/http.ts`) is a Web-standard `Request -> Response`

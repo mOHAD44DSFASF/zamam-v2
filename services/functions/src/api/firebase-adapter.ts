@@ -4,16 +4,14 @@ import { getAuth } from 'firebase-admin/auth'
 import { getFirestore } from 'firebase-admin/firestore'
 import { onRequest } from 'firebase-functions/v2/https'
 import { createLogger } from '@zamam/observability'
-import { createApi } from './api.js'
+import { createApi, resolveAllowedOrigins } from './api.js'
 import { composeFeatureCommandDispatcher } from './compose.js'
 import { createFeatureRoutes } from './feature-routes.js'
 import { FirestoreIdempotencyStore, FirestoreOutboxPublisher, FirestoreRateLimiter } from '../platform/firestore-runtime.js'
 
 if (getApps().length === 0) initializeApp()
 
-const allowedOrigins = new Set(
-  (process.env.ZAMAM_ALLOWED_ORIGINS ?? '').split(',').map((origin) => origin.trim()).filter(Boolean),
-)
+const allowedOrigins = resolveAllowedOrigins(process.env)
 
 const firestore = getFirestore()
 const apiHandler = createApi({

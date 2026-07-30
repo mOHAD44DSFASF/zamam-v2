@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { LogRecord } from '@zamam/observability'
 import { createLogger, redact } from '@zamam/observability'
 import type { OutboxEvent } from '@zamam/domain'
-import { createApi, type ApiDependencies } from '../services/functions/src/api/api'
+import { createApi, resolveAllowedOrigins, type ApiDependencies } from '../services/functions/src/api/api'
 import { InMemoryIdempotencyStore, InMemoryOutbox, InMemoryRateLimiter } from '../services/functions/src/platform/in-memory'
 import { processOutboxEvent, type EventDeliveryStore } from '../services/workers/src/worker'
 import { z } from 'zod'
@@ -85,6 +85,16 @@ describe('trusted API foundation', () => {
     expect(await response.json()).toMatchObject({ error: { code: 'CORS_DENIED' } })
   })
 
+  it('sends CORS headers on the OPTIONS preflight for an allowed origin', async () => {
+    const { handler } = apiFixture()
+    const preflight = new Request('https://api.example.com/v1/system/probe', {
+      method: 'OPTIONS', headers: { origin: 'http://localhost:5173' },
+    })
+    const response = await handler(preflight)
+    expect(response.status).toBe(204)
+    expect(response.headers.get('access-control-allow-origin')).toBe('http://localhost:5173')
+  })
+
   it('returns validation errors for malformed JSON', async () => {
     const { handler } = apiFixture()
     const response = await handler(probeRequest('{'))
@@ -126,6 +136,31 @@ describe('trusted API foundation', () => {
       principal: expect.objectContaining({ userId: 'user-1' }),
       correlationId: 'correlation-456', idempotencyKey: 'idempotency-456',
     }), { organizationId: 'org-1', name: 'Workspace' })
+  })
+})
+
+describe('resolveAllowedOrigins (CORS origin allowlist wiring)', () => {
+  // Regression for the local-dev bug where the Tasks page (and every other authenticated feature) failed
+  // with a CORS preflight error: firebase-adapter.ts read ZAMAM_ALLOWED_ORIGINS straight from
+  // process.env, which is unset unless a developer manually creates services/functions/.env from
+  // .env.example — with no explicit config, allowedOrigins was an empty Set, so createApi() denied
+  // every origin including the Vite dev server's, and the OPTIONS preflight failed before ever reaching
+  // route logic. This never surfaced in tests because api.ts's own CORS logic (given a correctly
+  // populated allowedOrigins) was always correct — the bug was purely in how that set got built.
+  it('denies every origin in production (no env var, not the emulator)', () => {
+    expect(resolveAllowedOrigins({})).toEqual(new Set())
+  })
+
+  it('falls back to the Vite dev server origins only inside the emulator, when nothing is configured', () => {
+    expect(resolveAllowedOrigins({ FUNCTIONS_EMULATOR: 'true' })).toEqual(
+      new Set(['http://localhost:5173', 'http://127.0.0.1:5173']),
+    )
+  })
+
+  it('prefers an explicitly configured ZAMAM_ALLOWED_ORIGINS even inside the emulator', () => {
+    expect(resolveAllowedOrigins({
+      FUNCTIONS_EMULATOR: 'true', ZAMAM_ALLOWED_ORIGINS: 'https://app.example.com, https://admin.example.com',
+    })).toEqual(new Set(['https://app.example.com', 'https://admin.example.com']))
   })
 })
 

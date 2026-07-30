@@ -65,8 +65,48 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return envelope.data
 }
 
+export interface RawTaskQueryResponse { items: readonly RawTaskRecord[]; nextCursor: unknown }
+export interface RawTaskRecord {
+  id?: unknown; projectId?: unknown; title?: unknown; description?: unknown
+  status?: unknown; priority?: unknown; dueAt?: unknown; clientVisible?: unknown; version?: unknown
+}
+
+/**
+ * POST /v1/tasks/query (services/functions/src/task/query.ts) returns { items, nextCursor } — raw task
+ * documents, not the enriched TaskSnapshot shape (project/workspace names, assignee names, subtask/
+ * checklist counts, workflow summary, capability flags) this screen was built against. That enrichment
+ * doesn't exist server-side yet. This adapter turns the real response into a valid, non-crashing
+ * TaskSnapshot: an empty result becomes a correct empty state instead of throwing on `.tasks[0]`, and a
+ * non-empty result renders with the fields the backend actually provides — projectName/workspaceName/
+ * assigneeNames/counts/workflow are degraded to safe placeholders until that backend work lands.
+ * capabilities defaults to all-false (fail closed) since this endpoint carries no permission
+ * information — action buttons stay hidden rather than being shown and then rejected server-side.
+ */
+export function toTaskSnapshot(response: RawTaskQueryResponse): TaskSnapshot {
+  const tasks: TaskSummary[] = response.items.map((item) => ({
+    id: String(item.id ?? ''),
+    projectId: String(item.projectId ?? ''),
+    projectName: String(item.projectId ?? ''),
+    workspaceName: null,
+    title: typeof item.title === 'string' ? item.title : '',
+    description: typeof item.description === 'string' ? item.description : '',
+    status: item.status as TaskSummary['status'],
+    priority: item.priority as TaskSummary['priority'],
+    dueAt: typeof item.dueAt === 'string' ? item.dueAt : null,
+    assigneeNames: [],
+    clientVisible: Boolean(item.clientVisible),
+    version: typeof item.version === 'number' ? item.version : 1,
+    subtaskCount: 0, completedSubtaskCount: 0, checklistCount: 0, completedChecklistCount: 0,
+  }))
+  const projects = [...new Map(tasks.map((task) => [task.projectId, { id: task.projectId, name: task.projectName }])).values()]
+  return {
+    tasks, projects, workspaces: [],
+    capabilities: { create: false, update: false, transition: false, assign: false, reopen: false, archive: false, saveView: false },
+  }
+}
+
 export const taskClient: TaskClient = {
-  load: (organizationId) => post('/v1/tasks/query', { organizationId, limit: 50 }),
+  load: async (organizationId) => toTaskSnapshot(await post('/v1/tasks/query', { organizationId, limit: 50 })),
   create: (organizationId, input) => post('/v1/tasks/create', { organizationId, id: crypto.randomUUID(), ...input }),
   update: (organizationId, input) => post('/v1/tasks/update', { organizationId, ...input }),
   saveView: (organizationId, input) => post('/v1/task-views/create', {
