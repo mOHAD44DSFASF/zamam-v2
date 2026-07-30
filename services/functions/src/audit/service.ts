@@ -59,6 +59,20 @@ async function nextAuditSequence(transaction: AtomicTransaction, organizationId:
 export class AuditCommandService {
   constructor(private readonly store: AtomicStore, private readonly now: () => Date = () => new Date()) {}
 
+  async replay<TResult>(context: Omit<AuditedCommandContext, 'permission'> & { permission?: Permission }) {
+    const idempotencyPath = tenantSystemPath(context.organizationId, '_idempotency', context.idempotencyKey)
+    return this.store.runTransaction(async (transaction) => {
+      const existing = await transaction.get(idempotencyPath)
+      if (!existing) return null
+      if (existing.fingerprint !== context.fingerprint || existing.actorUserId !== context.actorUserId
+        || (context.permission && existing.permission !== context.permission)) {
+        throw new Error('IDEMPOTENCY_CONFLICT')
+      }
+      if (typeof existing.responseJson !== 'string') throw new Error('IDEMPOTENCY_IN_PROGRESS')
+      return { result: JSON.parse(existing.responseJson) as TResult, replayed: true as const }
+    })
+  }
+
   async execute<TResult>(context: AuditedCommandContext, operation: (transaction: AtomicTransaction) => Promise<AuditedMutation<TResult>>): Promise<{ result: TResult; replayed: boolean }> {
     const idempotencyPath = tenantSystemPath(context.organizationId, '_idempotency', context.idempotencyKey)
     try {

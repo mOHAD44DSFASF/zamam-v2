@@ -53,7 +53,14 @@ export function TaskManagementScreen({ organizationId, client, view = 'list', on
     </div>
     {view === 'list' ? <div className="mx-auto grid max-w-7xl px-5 py-5 lg:grid-cols-[350px_1fr]">
       <aside className="divide-y border bg-white">{snapshot.tasks.map((task) => <button key={task.id} onClick={() => setSelectedId(task.id)} aria-current={task.id === selectedId ? 'true' : undefined} className="block w-full px-4 py-4 text-right hover:bg-gray-50 aria-[current=true]:bg-teal-50"><span className="block font-bold">{task.title}</span><span className="mt-1 block text-xs text-gray-500">{task.projectName} · {statusLabel[task.status]} · {priorityLabel[task.priority]}</span></button>)}{snapshot.tasks.length === 0 && <p className="p-8 text-center text-gray-500">لا توجد مهام ضمن نطاقك.</p>}</aside>
-      <section className="border border-r-0 bg-white p-6">{!selected ? <div className="grid min-h-72 place-items-center text-gray-500">اختر مهمة.</div> : <TaskDetails task={selected} canEdit={snapshot.capabilities.update} onEdit={() => setEditor('edit')} />}</section>
+      <section className="border border-r-0 bg-white p-6">{!selected ? <div className="grid min-h-72 place-items-center text-gray-500">اختر مهمة.</div> : <TaskDetails task={selected} canEdit={snapshot.capabilities.update} canTransition={snapshot.capabilities.transition} onEdit={() => setEditor('edit')} onTransition={async (transitionKey) => {
+        if (!selected.workflow) return
+        await client.transitionWorkflow(organizationId, {
+          instanceId: selected.workflow.instanceId, transitionKey,
+          expectedConcurrencyVersion: selected.workflow.concurrencyVersion,
+        })
+        await load()
+      }} />}</section>
     </div> : <TaskAlternateView view={view} tasks={snapshot.tasks} />}
     {editor && <TaskEditor mode={editor} snapshot={snapshot} task={editor === 'edit' ? selected : null} onClose={() => setEditor(null)} onSubmit={async (input) => {
       if (editor === 'create') await client.create(organizationId, input)
@@ -78,13 +85,20 @@ function TaskAlternateView({ view, tasks }: { view: Exclude<TaskView, 'list'>; t
   return <section aria-label="الخط الزمني للمهام" className="mx-auto max-w-7xl px-5 py-5"><ol className="border bg-white p-5">{sorted.map((task, index) => <li key={task.id} className="relative border-r-2 border-teal-700 py-4 pr-6"><span className="absolute -right-2 top-5 size-3 rounded-full bg-teal-700" aria-hidden="true" /><p className="text-xs text-gray-500">{index + 1} · {task.dueAt?.slice(0, 10)}</p><h2 className="font-bold">{task.title}</h2></li>)}</ol></section>
 }
 
-function TaskDetails({ task, canEdit, onEdit }: { task: TaskSummary; canEdit: boolean; onEdit: () => void }) {
+function TaskDetails({ task, canEdit, canTransition, onEdit, onTransition }: {
+  task: TaskSummary
+  canEdit: boolean
+  canTransition: boolean
+  onEdit: () => void
+  onTransition: (transitionKey: string) => Promise<void>
+}) {
   return <>
     <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-5"><div><div className="flex items-center gap-2"><h2 className="text-xl font-black">{task.title}</h2><span className="rounded bg-gray-100 px-2 py-1 text-xs font-bold">{statusLabel[task.status]}</span></div><p className="mt-1 text-sm text-gray-500">{task.projectName}{task.workspaceName ? ` · ${task.workspaceName}` : ''}</p></div>{canEdit && !['completed', 'cancelled', 'archived'].includes(task.status) && <button onClick={onEdit} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-bold"><Pencil className="size-4" aria-hidden="true" /> تعديل</button>}</div>
     <nav aria-label="أقسام المهمة" className="flex gap-5 overflow-x-auto border-b py-4 text-sm font-bold"><span className="text-teal-800">نظرة عامة</span><span>المهام الفرعية</span><span>قائمة التحقق</span><span>النشاط</span></nav>
     <p className="min-h-28 whitespace-pre-wrap py-6 text-gray-700">{task.description || 'لا يوجد وصف.'}</p>
     <div className="grid gap-4 border-t pt-5 sm:grid-cols-3"><div className="flex gap-2"><Clock3 className="size-4" aria-hidden="true" /><span>{task.dueAt ?? 'دون موعد'}</span></div><div className="flex gap-2"><UserRound className="size-4" aria-hidden="true" /><span>{task.assigneeNames.join('، ') || 'غير مسندة'}</span></div><div className="flex gap-2"><CircleDot className="size-4" aria-hidden="true" /><span>{priorityLabel[task.priority]}</span></div></div>
     <div className="mt-5 flex gap-5 text-sm"><span className="flex gap-2"><CheckSquare className="size-4" aria-hidden="true" /> {task.completedChecklistCount}/{task.checklistCount} قائمة تحقق</span><span>{task.completedSubtaskCount}/{task.subtaskCount} مهام فرعية</span></div>
+    {task.workflow && <section aria-labelledby="task-workflow-heading" className="mt-6 border-t pt-5"><h3 id="task-workflow-heading" className="font-black">سير العمل</h3><div className="mt-3 flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm">المرحلة الحالية: <strong>{task.workflow.currentStageName}</strong></p><p className="mt-1 text-xs text-gray-500">الإصدار المثبت: {task.workflow.workflowVersionId}{task.workflow.stageDueAt ? ` · SLA ${task.workflow.stageDueAt}` : ''}</p></div>{canTransition && <div className="flex flex-wrap gap-2">{task.workflow.availableTransitions.map((transition) => <button key={transition.key} type="button" onClick={() => void onTransition(transition.key)} className="rounded-md border px-3 py-2 text-sm font-bold">{transition.label} إلى {transition.toStageName}</button>)}</div>}</div></section>}
   </>
 }
 

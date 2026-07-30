@@ -1,6 +1,6 @@
 # Autonomous Test Matrix
 
-Latest additions: P14 workflow graph/builder/versioning 9 passed; RTL builder accessibility/simulation/save/publish 3 passed.
+Latest additions: P15 workflow execution pin/race/replay/gates/rework/migration/SLA 9 passed; pinned workflow transition UI assertion added.
 
 | Prompt | المستوى | النطاق | الحالة |
 |---:|---|---|---|

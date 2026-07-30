@@ -17,6 +17,15 @@ export interface TaskSummary {
   completedSubtaskCount: number
   checklistCount: number
   completedChecklistCount: number
+  workflow?: {
+    instanceId: string
+    workflowVersionId: string
+    currentStageKey: string
+    currentStageName: string
+    concurrencyVersion: number
+    stageDueAt: string | null
+    availableTransitions: readonly { key: string; label: string; toStageName: string }[]
+  }
 }
 export interface TaskSnapshot {
   tasks: readonly TaskSummary[]
@@ -35,6 +44,7 @@ export interface TaskClient {
     priority: TaskSummary['priority']; dueAt: string | null; clientVisible: boolean
   }): Promise<void>
   saveView(organizationId: string, input: { name: string; view: 'list' | 'board' | 'calendar' | 'timeline' }): Promise<void>
+  transitionWorkflow(organizationId: string, input: { instanceId: string; transitionKey: string; expectedConcurrencyVersion: number }): Promise<void>
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
@@ -63,4 +73,5 @@ export const taskClient: TaskClient = {
     organizationId, id: crypto.randomUUID(), resourceType: 'task',
     name: input.name, filters: { presentation: input.view }, visibility: 'private',
   }),
+  transitionWorkflow: (organizationId, input) => post('/v1/workflows/instances/transition', { organizationId, ...input }),
 }

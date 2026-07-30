@@ -13,6 +13,11 @@ const snapshot: TaskSnapshot = {
     title: 'كتابة الصفحة الرئيسية', description: 'وصف المهمة', status: 'in_progress', priority: 'high',
     dueAt: '2026-08-10T12:00:00.000Z', assigneeNames: ['أحمد'], clientVisible: false, version: 4,
     subtaskCount: 2, completedSubtaskCount: 1, checklistCount: 3, completedChecklistCount: 2,
+    workflow: {
+      instanceId: 'instance-1', workflowVersionId: 'workflow-v1', currentStageKey: 'write',
+      currentStageName: 'الكتابة', concurrencyVersion: 2, stageDueAt: null,
+      availableTransitions: [{ key: 'submit', label: 'إرسال', toStageName: 'المراجعة' }],
+    },
   }],
   projects: [{ id: 'project-1', name: 'الموقع الجديد' }],
   workspaces: [{ id: 'workspace-1', name: 'مساحة التنفيذ', projectId: 'project-1' }],
@@ -24,6 +29,7 @@ function client(): TaskClient {
     create: vi.fn().mockResolvedValue(undefined),
     update: vi.fn().mockResolvedValue(undefined),
     saveView: vi.fn().mockResolvedValue(undefined),
+    transitionWorkflow: vi.fn().mockResolvedValue(undefined),
   }
 }
 
@@ -68,5 +74,15 @@ describe('task management UI', () => {
     expect(await screen.findByRole('region', { name: 'لوحة المهام' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'حفظ العرض' }))
     await waitFor(() => expect(api.saveView).toHaveBeenCalledWith('org-1', { name: 'عرض board', view: 'board' }))
+  })
+
+  it('uses the pinned workflow concurrency version for a transition command', async () => {
+    const api = client()
+    render(<TaskManagementScreen organizationId="org-1" client={api} />)
+    await screen.findByRole('heading', { name: 'المهام' })
+    fireEvent.click(screen.getByRole('button', { name: 'إرسال إلى المراجعة' }))
+    await waitFor(() => expect(api.transitionWorkflow).toHaveBeenCalledWith('org-1', {
+      instanceId: 'instance-1', transitionKey: 'submit', expectedConcurrencyVersion: 2,
+    }))
   })
 })

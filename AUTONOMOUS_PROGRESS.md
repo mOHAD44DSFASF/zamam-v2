@@ -6,7 +6,8 @@
 - Prompt 12 Task management core: **Complete**. Typed task aggregate, guarded lifecycle/concurrency, assignments, subtasks/checklists, audited commands, and RTL create/edit/details.
 - Prompt 13 Task views and saved filters: **Complete**. Scoped bounded query planner, assignment resolution, search boundary, audited saved views, and URL-preserved list/board/calendar/timeline.
 - Prompt 14 Workflow builder: **Complete**. Declarative graph validation/simulation, versioned immutable publication with step-up, atomic records, and accessible RTL builder.
-- Prompt 15 Workflow execution engine: **In progress**. Pinned instances, guarded transitions, SLA/escalation, exactly-once effects, and recovery controls.
+- Prompt 15 Workflow execution engine: **Complete**. Pinned instances, exactly-once guarded transitions, full stage history, rework cycles, SLA breach scan, compatible migrations, and task UI commands.
+- Prompt 16 Reviews and approvals: **In progress**. Immutable review evidence, any/all/ordered policies, changes/reject/resubmit/delegate/expire.
 
 آخر تحديث: 2026-07-30
 
