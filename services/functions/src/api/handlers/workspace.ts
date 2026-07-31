@@ -1,6 +1,6 @@
 import { WorkspaceService, buildWorkspaceMembershipQuery, type WorkspaceLifecyclePort } from '../../workspace/service.js'
 import type { Deps } from '../deps.js'
-import { listQuery } from '../deps.js'
+import { evaluateCapabilities, listQuery, resolveNames } from '../deps.js'
 import type { HandlerRegistry } from '../registry.js'
 import { requireString } from '../registry.js'
 
@@ -47,7 +47,21 @@ export function createWorkspaceHandlers(deps: Deps): HandlerRegistry {
       const workspaceIds = [...new Set(memberships.items.map((item) => String(item.workspaceId)))]
       const workspaces = await Promise.all(workspaceIds.map((id) =>
         deps.firestore.doc(`v2Organizations/${context.organizationId}/workspace/${id}`).get()))
-      return { items: workspaces.filter((snapshot) => snapshot.exists).map((snapshot) => ({ id: snapshot.id, ...snapshot.data() })) }
+      const rows = workspaces.filter((snapshot) => snapshot.exists).map((snapshot) => ({ id: snapshot.id, ...snapshot.data() }) as Record<string, unknown>)
+      // M2: resolve project / owner-team names once instead of returning raw ids.
+      const [projectNames, teamNames] = await Promise.all([
+        resolveNames(deps, context.organizationId, 'project', rows.map((r) => String(r.projectId ?? ''))),
+        resolveNames(deps, context.organizationId, 'team', rows.map((r) => String(r.ownerTeamId ?? ''))),
+      ])
+      const items = rows.map((r) => ({
+        ...r,
+        projectName: r.projectId ? projectNames.get(String(r.projectId)) ?? null : null,
+        teamName: r.ownerTeamId ? teamNames.get(String(r.ownerTeamId)) ?? null : null,
+      }))
+      const capabilities = await evaluateCapabilities(deps, context.principal, context.organizationId, {
+        create: 'workspace.create', manageMembers: 'workspace.member.manage', archive: 'workspace.archive',
+      })
+      return { items, capabilities }
     },
     '/v1/workspaces/create': (context, input) => service.create(metadata(context), {
       id: requireString(input, 'id'), name: requireString(input, 'name'),

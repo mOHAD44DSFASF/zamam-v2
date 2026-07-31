@@ -1,7 +1,7 @@
 import { tenantDocumentPath } from '@zamam/firestore'
 import { TimeTrackingService, buildTimeEntryQuery, type TimeClock, type TimeLookupPort } from '../../time/service.js'
 import type { Deps } from '../deps.js'
-import { listQuery, readDoc } from '../deps.js'
+import { evaluateCapabilities, listQuery, readDoc } from '../deps.js'
 import type { HandlerRegistry } from '../registry.js'
 import { requireNumber, requireString } from '../registry.js'
 
@@ -65,7 +65,11 @@ export function createTimeHandlers(deps: Deps): HandlerRegistry {
         ...(Array.isArray(input.cursor) ? { cursor: input.cursor } : {}),
       })
       const page = await deps.queries.list<Record<string, unknown>>(`v2Organizations/${context.organizationId}/time_entry`, query)
-      return { items: page.items, nextCursor: page.nextCursor }
+      const capabilities = await evaluateCapabilities(deps, context.principal, context.organizationId, {
+        track: 'time.track', submit: 'timesheet.submit', approve: 'timesheet.approve',
+        viewBillable: 'time.view_team', requestCorrection: 'time.adjust',
+      })
+      return { items: page.items, nextCursor: page.nextCursor, capabilities }
     },
     '/v1/time/timer/start': (context, input) => service.startTimer(metadata(context), {
       id: requireString(input, 'id'), projectId: requireString(input, 'projectId'),

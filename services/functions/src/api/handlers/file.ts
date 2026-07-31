@@ -1,7 +1,7 @@
 import { tenantDocumentPath } from '@zamam/firestore'
 import { FileService, buildFileLibraryQuery, type FileClock, type FileLookupPort, type FileResourcePort } from '../../file/service.js'
 import type { Deps } from '../deps.js'
-import { listQuery, readDoc, resolveTaskOrProjectResource } from '../deps.js'
+import { evaluateCapabilities, listQuery, readDoc, resolveTaskOrProjectResource } from '../deps.js'
 import type { HandlerRegistry } from '../registry.js'
 import { requireNumber, requireString } from '../registry.js'
 
@@ -48,7 +48,10 @@ export function createFileHandlers(deps: Deps): HandlerRegistry {
         ...(Array.isArray(input.cursor) ? { cursor: input.cursor } : {}),
       })
       const page = await deps.queries.list<Record<string, unknown>>(`v2Organizations/${context.organizationId}/attachment`, query)
-      return { items: page.items, nextCursor: page.nextCursor }
+      const capabilities = await evaluateCapabilities(deps, context.principal, context.organizationId, {
+        upload: 'file.upload', shareWithClient: 'file.client.share', restore: 'file.restore',
+      })
+      return { items: page.items, nextCursor: page.nextCursor, capabilities }
     },
     '/v1/files/upload/prepare': (context, input) => service.prepareUpload(metadata(context), {
       fileId: requireString(input, 'fileId'), fileVersionId: requireString(input, 'fileVersionId'),

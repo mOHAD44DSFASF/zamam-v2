@@ -10,7 +10,7 @@ interface RawAutomationRow { id?: unknown; name?: unknown; status?: unknown; tri
  * snapshot; runs empty, capabilities fail closed, engine limits reported as the documented defaults.
  * Tracked as audit M1/M2.
  */
-function toAutomationSnapshot(raw:{items?:readonly RawAutomationRow[]}):AutomationSnapshot{
+function toAutomationSnapshot(raw:{items?:readonly RawAutomationRow[];capabilities?:AutomationSnapshot['capabilities']}):AutomationSnapshot{
   const automations=(raw.items??[]).map((row)=>({
     id:String(row.id??''),name:typeof row.name==='string'?row.name:'',
     status:(typeof row.status==='string'?row.status:'draft') as AutomationSnapshot['automations'][number]['status'],
@@ -19,6 +19,6 @@ function toAutomationSnapshot(raw:{items?:readonly RawAutomationRow[]}):Automati
     actionCount:typeof row.actionCount==='number'?row.actionCount:0,
     version:typeof row.version==='number'?row.version:1,
   }))
-  return {automations,runs:[],capabilities:{create:false,manage:false,publish:false,cancel:false},limits:{maxActions:0,maxDepth:0,hourlyRuns:0}}
+  return {automations,runs:[],capabilities:raw.capabilities??{create:false,manage:false,publish:false,cancel:false},limits:{maxActions:0,maxDepth:0,hourlyRuns:0}}
 }
 export const automationClient:AutomationClient={load:async organizationId=>toAutomationSnapshot(await post('/v1/automations/query',{organizationId,limit:50})),setStatus:(organizationId,input)=>post('/v1/automations/status',{organizationId,...input})}

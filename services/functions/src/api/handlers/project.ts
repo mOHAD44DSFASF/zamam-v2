@@ -1,6 +1,6 @@
 import { ProjectService, type ProjectLifecyclePort } from '../../project/service.js'
 import type { Deps } from '../deps.js'
-import { listQuery } from '../deps.js'
+import { evaluateCapabilities, listQuery, resolveNames } from '../deps.js'
 import type { HandlerRegistry } from '../registry.js'
 import { requireBoolean, requireNumber, requireString } from '../registry.js'
 
@@ -47,7 +47,24 @@ export function createProjectHandlers(deps: Deps): HandlerRegistry {
         ],
         orderBy: [{ field: 'updatedAt', direction: 'desc' }], limit: 50,
       })
-      return { items: page.items, nextCursor: page.nextCursor }
+      // M2: resolve client / manager / department names once instead of returning raw ids.
+      const rows = page.items as Record<string, unknown>[]
+      const [clientNames, managerNames, departmentNames] = await Promise.all([
+        resolveNames(deps, context.organizationId, 'client', rows.map((r) => String(r.clientId ?? ''))),
+        resolveNames(deps, context.organizationId, 'user_profile', rows.map((r) => String(r.managerUserId ?? '')), 'displayName'),
+        resolveNames(deps, context.organizationId, 'department', rows.map((r) => String(r.departmentId ?? ''))),
+      ])
+      const items = rows.map((r) => ({
+        ...r,
+        clientName: clientNames.get(String(r.clientId ?? '')) ?? '',
+        managerName: managerNames.get(String(r.managerUserId ?? '')) ?? '',
+        departmentName: r.departmentId ? departmentNames.get(String(r.departmentId)) ?? null : null,
+      }))
+      const capabilities = await evaluateCapabilities(deps, context.principal, context.organizationId, {
+        create: 'project.create', manage: 'project.manage', manageMembers: 'project.member.manage',
+        archive: 'project.archive', viewFinancial: 'project.financial.view', manageFinancial: 'project.financial.manage',
+      })
+      return { items, nextCursor: page.nextCursor, capabilities }
     },
     '/v1/projects/create': (context, input) => service.create(metadata(context), {
       id: requireString(input, 'id'), clientId: requireString(input, 'clientId'), name: requireString(input, 'name'),

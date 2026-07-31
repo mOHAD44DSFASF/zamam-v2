@@ -3,6 +3,7 @@ import {
   type ExportProjectionPolicy, type MetricSourcePort, type ReportingClock, type ReportingLookup,
 } from '../../reporting/service.js'
 import type { Deps } from '../deps.js'
+import { evaluateCapabilities } from '../deps.js'
 import type { HandlerRegistry } from '../registry.js'
 import { requireString } from '../registry.js'
 
@@ -39,7 +40,10 @@ export function createReportingHandlers(deps: Deps): HandlerRegistry {
         ...(Array.isArray(input.cursor) ? { cursor: input.cursor } : {}),
       })
       const page = await deps.queries.list<Record<string, unknown>>(`v2Organizations/${context.organizationId}/kpi_measurement`, query)
-      return { items: page.items, nextCursor: page.nextCursor }
+      const capabilities = await evaluateCapabilities(deps, context.principal, context.organizationId, {
+        export: 'report.export', viewPerformance: 'performance.sensitive.view', viewFinancial: 'project.financial.view',
+      })
+      return { items: page.items, nextCursor: page.nextCursor, capabilities }
     },
     '/v1/reports/export': (context, input) => service.requestExport({
       organizationId: context.organizationId, principal: context.principal,

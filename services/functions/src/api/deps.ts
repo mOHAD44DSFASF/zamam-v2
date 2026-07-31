@@ -54,6 +54,48 @@ export async function resolveTaskOrProjectResource(
   }
 }
 
+/**
+ * Computes the organization-scoped capability flags a page uses to show/hide action buttons, by asking
+ * the same TrustedAuthorizationService that gates the corresponding commands (`.evaluate` — the read-only
+ * counterpart of `.require`). This exposes existing authorization for UI purposes only; it never changes
+ * what is allowed, and the command handlers still enforce independently. Mirrors the inline pattern the
+ * `/v1/organization/directory/query` handler already uses.
+ */
+export async function evaluateCapabilities<K extends string>(
+  deps: Deps,
+  principal: AuthorizationPrincipal,
+  organizationId: string,
+  permissionByCapability: Readonly<Record<K, AuthorizationRequest['permission']>>,
+): Promise<Record<K, boolean>> {
+  const entries = Object.entries(permissionByCapability) as [K, AuthorizationRequest['permission']][]
+  const results = await Promise.all(entries.map(async ([capability, permission]) => {
+    const decision = await deps.authorization.evaluate(principal, { permission, organizationId })
+    return [capability, decision.allowed] as const
+  }))
+  return Object.fromEntries(results) as Record<K, boolean>
+}
+
+/**
+ * Batch-resolves a display field (e.g. name) for a set of entity ids, so list handlers can return human
+ * names instead of raw ids without an N+1 query. De-duplicates ids and reads each doc once. Reuses the
+ * same tenant document layout every service writes to; no new storage.
+ */
+export async function resolveNames(
+  deps: Deps,
+  organizationId: string,
+  kind: TenantEntityKind,
+  ids: readonly string[],
+  field = 'name',
+): Promise<Map<string, string | null>> {
+  const unique = [...new Set(ids.filter(Boolean))]
+  const entries = await Promise.all(unique.map(async (id) => {
+    const doc = await readDoc(deps.firestore, tenantDocumentPath(organizationId, kind, id))
+    const value = doc?.[field]
+    return [id, typeof value === 'string' ? value : null] as const
+  }))
+  return new Map(entries)
+}
+
 export function listQuery<T = Record<string, unknown>>(
   deps: Deps,
   organizationId: string,

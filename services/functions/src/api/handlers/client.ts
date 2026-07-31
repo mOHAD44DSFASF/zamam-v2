@@ -3,7 +3,7 @@ import { ClientService, type ClientLifecyclePort } from '../../client/service.js
 import { AesGcmClientDataProtectionAdapter } from '../../client/aes-data-protection.js'
 import { EnvSecretProvider } from '../../platform/secrets.js'
 import type { Deps } from '../deps.js'
-import { listQuery } from '../deps.js'
+import { evaluateCapabilities, listQuery } from '../deps.js'
 import type { HandlerRegistry } from '../registry.js'
 import { requireBoolean, requireNumber, requireString } from '../registry.js'
 
@@ -36,7 +36,10 @@ export function createClientHandlers(deps: Deps): HandlerRegistry {
         filters: [{ field: 'status', operator: 'in', value: ['lead', 'active', 'paused'] }],
         orderBy: [{ field: 'name', direction: 'asc' }], limit: 100,
       })
-      return { items: page.items }
+      const capabilities = await evaluateCapabilities(deps, context.principal, context.organizationId, {
+        create: 'client.create', manage: 'client.manage', manageContacts: 'client.contact.manage', archive: 'client.archive',
+      })
+      return { items: page.items, capabilities }
     },
     '/v1/clients/create': (context, input) => service.create(metadata(context), {
       id: requireString(input, 'id'), name: requireString(input, 'name'), code: requireString(input, 'code'),

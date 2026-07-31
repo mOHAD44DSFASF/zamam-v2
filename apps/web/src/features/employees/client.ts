@@ -58,6 +58,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 
 interface RawEmployeeRow {
   userId?: unknown; displayName?: unknown; jobTitle?: unknown; employmentStatus?: unknown
+  employeeNumber?: unknown; employmentType?: unknown; primaryDepartmentId?: unknown; departmentName?: unknown
 }
 
 /**
@@ -68,15 +69,18 @@ interface RawEmployeeRow {
  * (the create-form dropdown is empty until the backend composes it), and capabilities fail closed
  * (create/manage buttons hidden — the backend still enforces every command). Tracked as audit M1/M2.
  */
-function toEmployeeSnapshot(raw: { items?: readonly RawEmployeeRow[] }): EmployeeDirectorySnapshot {
+function toEmployeeSnapshot(raw: { items?: readonly RawEmployeeRow[]; capabilities?: EmployeeDirectorySnapshot['capabilities'] }): EmployeeDirectorySnapshot {
   const items: EmployeeDirectoryItem[] = (raw.items ?? []).map((row) => ({
     userId: String(row.userId ?? ''),
     displayName: typeof row.displayName === 'string' ? row.displayName : '',
-    employeeNumber: '', jobTitle: typeof row.jobTitle === 'string' ? row.jobTitle : '',
-    departmentId: '', departmentName: '', employmentType: 'employee',
+    employeeNumber: typeof row.employeeNumber === 'string' ? row.employeeNumber : '',
+    jobTitle: typeof row.jobTitle === 'string' ? row.jobTitle : '',
+    departmentId: typeof row.primaryDepartmentId === 'string' ? row.primaryDepartmentId : '',
+    departmentName: typeof row.departmentName === 'string' ? row.departmentName : '',
+    employmentType: row.employmentType === 'contractor' ? 'contractor' : 'employee',
     status: (typeof row.employmentStatus === 'string' ? row.employmentStatus : 'active') as EmployeeDirectoryItem['status'],
   }))
-  return { items, departments: [], capabilities: { invite: false, update: false, disable: false, viewHr: false } }
+  return { items, departments: [], capabilities: raw.capabilities ?? { invite: false, update: false, disable: false, viewHr: false } }
 }
 
 export const employeeDirectoryClient: EmployeeDirectoryClient = {

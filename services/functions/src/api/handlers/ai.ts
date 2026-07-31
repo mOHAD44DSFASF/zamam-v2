@@ -2,7 +2,7 @@ import { tenantDocumentPath } from '@zamam/firestore'
 import { AIService, type AILookup, type AIPolicyPort } from '../../ai/service.js'
 import { FirestoreRateLimiter } from '../../platform/firestore-runtime.js'
 import type { Deps } from '../deps.js'
-import { listQuery, readDoc } from '../deps.js'
+import { evaluateCapabilities, listQuery, readDoc } from '../deps.js'
 import type { HandlerRegistry } from '../registry.js'
 import { requireNumber, requireString } from '../registry.js'
 
@@ -46,7 +46,10 @@ export function createAiHandlers(deps: Deps): HandlerRegistry {
           orderBy: [{ field: 'createdAt', direction: 'desc' }], limit: 25,
         }),
       ])
-      return { requests: requests.items, proposals: proposals.items }
+      const capabilities = await evaluateCapabilities(deps, context.principal, context.organizationId, {
+        request: 'ai.use', approveProposal: 'ai.action.approve', viewHistory: 'ai.view_history',
+      })
+      return { requests: requests.items, proposals: proposals.items, capabilities }
     },
     '/v1/ai/request': (context, input) => service.request(metadata(context), {
       id: requireString(input, 'id'), purpose: requireString(input, 'purpose') as 'summarize' | 'draft' | 'suggest_actions',

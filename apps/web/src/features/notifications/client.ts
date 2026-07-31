@@ -71,7 +71,7 @@ interface RawNotificationRow {
  * Adapter maps the real notifications into a valid snapshot; preferences empty, provider unconfigured,
  * capabilities fail closed (backend still enforces). Tracked as audit M1/M2.
  */
-function toNotificationSnapshot(raw: { items?: readonly RawNotificationRow[] }): NotificationSnapshot {
+function toNotificationSnapshot(raw: { items?: readonly RawNotificationRow[]; capabilities?: NotificationSnapshot['capabilities'] }): NotificationSnapshot {
   const notifications: NotificationSummary[] = (raw.items ?? []).map((row) => ({
     id: String(row.id ?? ''), title: typeof row.title === 'string' ? row.title : '',
     preview: typeof row.preview === 'string' ? row.preview : '',
@@ -81,7 +81,7 @@ function toNotificationSnapshot(raw: { items?: readonly RawNotificationRow[] }):
     resourceId: typeof row.resourceId === 'string' ? row.resourceId : null,
     version: typeof row.version === 'number' ? row.version : 1,
   }))
-  return { notifications, preferences: [], emailProvider: { name: 'local', configured: false }, capabilities: { managePreferences: false } }
+  return { notifications, preferences: [], emailProvider: { name: 'local', configured: false }, capabilities: raw.capabilities ?? { managePreferences: false } }
 }
 
 export const notificationClient: NotificationClient = {

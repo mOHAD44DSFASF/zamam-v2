@@ -59,7 +59,7 @@ interface RawAIRequest {
  * this adapter reports it disabled and maps the request history; proposal grouping and capability flags
  * fail closed (backend still enforces). Tracked as audit M1/M2/L2.
  */
-function toAISnapshot(raw: { requests?: readonly RawAIRequest[] }): AISnapshot {
+function toAISnapshot(raw: { requests?: readonly RawAIRequest[]; capabilities?: AISnapshot['capabilities'] }): AISnapshot {
   const requests: AIRequestSummary[] = (raw.requests ?? []).map((row) => ({
     id: String(row.id ?? ''), purpose: (typeof row.purpose === 'string' ? row.purpose : 'summarize') as AIRequestSummary['purpose'],
     status: (typeof row.status === 'string' ? row.status : 'completed') as AIRequestSummary['status'],
@@ -69,7 +69,7 @@ function toAISnapshot(raw: { requests?: readonly RawAIRequest[] }): AISnapshot {
   return {
     provider: { configured: false, mode: 'disabled', name: 'disabled' },
     policy: { enabled: false, proposalOnly: true, retentionHours: 72, allowedClassifications: [] },
-    capabilities: { request: false, approveProposal: false, viewHistory: true },
+    capabilities: raw.capabilities ?? { request: false, approveProposal: false, viewHistory: true },
     requests,
   }
 }

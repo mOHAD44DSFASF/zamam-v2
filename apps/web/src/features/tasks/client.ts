@@ -65,7 +65,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return envelope.data
 }
 
-export interface RawTaskQueryResponse { items: readonly RawTaskRecord[]; nextCursor: unknown }
+export interface RawTaskQueryResponse { items: readonly RawTaskRecord[]; nextCursor: unknown; capabilities?: TaskSnapshot['capabilities'] }
 export interface RawTaskRecord {
   id?: unknown; projectId?: unknown; title?: unknown; description?: unknown
   status?: unknown; priority?: unknown; dueAt?: unknown; clientVisible?: unknown; version?: unknown
@@ -101,7 +101,7 @@ export function toTaskSnapshot(response: RawTaskQueryResponse): TaskSnapshot {
   const projects = [...new Map(tasks.map((task) => [task.projectId, { id: task.projectId, name: task.projectName }])).values()]
   return {
     tasks, projects, workspaces: [],
-    capabilities: { create: false, update: false, transition: false, assign: false, reopen: false, archive: false, saveView: false },
+    capabilities: response.capabilities ?? { create: false, update: false, transition: false, assign: false, reopen: false, archive: false, saveView: false },
   }
 }
 

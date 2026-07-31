@@ -36,14 +36,14 @@ function trailingWindow(): { periodStart: string; periodEnd: string } {
   const start = new Date(end.getTime() - 35 * 86_400_000)
   return { periodStart: start.toISOString().slice(0, 10), periodEnd: end.toISOString().slice(0, 10) }
 }
-function emptyAttendanceSnapshot(): AttendanceLeaveSnapshot {
-  return { today: null, leaveTypes: [], myRequests: [], approvalQueue: [], capabilities: { recordAttendance: false, requestLeave: false, approveLeave: false, viewTeamAttendance: false } }
+function emptyAttendanceSnapshot(capabilities?: AttendanceLeaveSnapshot['capabilities']): AttendanceLeaveSnapshot {
+  return { today: null, leaveTypes: [], myRequests: [], approvalQueue: [], capabilities: capabilities ?? { recordAttendance: false, requestLeave: false, approveLeave: false, viewTeamAttendance: false } }
 }
 
 export const attendanceLeaveClient: AttendanceLeaveClient = {
   load: async (organizationId) => {
-    await post('/v1/attendance/overview', { organizationId, ...trailingWindow() })
-    return emptyAttendanceSnapshot()
+    const raw = await post<{ capabilities?: AttendanceLeaveSnapshot['capabilities'] }>('/v1/attendance/overview', { organizationId, ...trailingWindow() })
+    return emptyAttendanceSnapshot(raw.capabilities)
   },
   record: (organizationId, input) => post('/v1/attendance/record', { organizationId, ...input }),
   requestLeave: (organizationId, input) => post('/v1/leave/request', { organizationId, ...input }),

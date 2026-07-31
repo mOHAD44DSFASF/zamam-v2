@@ -1,6 +1,6 @@
 import { TemplateService, type TemplateMaterializer } from '../../template/service.js'
 import type { Deps } from '../deps.js'
-import { listQuery } from '../deps.js'
+import { evaluateCapabilities, listQuery } from '../deps.js'
 import type { HandlerRegistry } from '../registry.js'
 import { requireNumber, requireString } from '../registry.js'
 
@@ -21,7 +21,10 @@ export function createTemplateHandlers(deps: Deps): HandlerRegistry {
       const page = await listQuery(deps, context.organizationId, 'work_template', {
         orderBy: [{ field: 'updatedAt', direction: 'desc' }], limit: 50,
       })
-      return { items: page.items }
+      const capabilities = await evaluateCapabilities(deps, context.principal, context.organizationId, {
+        create: 'template.create', publish: 'template.publish', manageRecurrence: 'recurrence.manage',
+      })
+      return { items: page.items, capabilities }
     },
     '/v1/templates/create': (context, input) => service.create(metadata(context), {
       id: requireString(input, 'id'), name: requireString(input, 'name'),

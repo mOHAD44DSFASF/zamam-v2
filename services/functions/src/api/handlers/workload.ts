@@ -1,6 +1,6 @@
 import { WorkloadProjectionService, buildWorkloadQuery, workloadViewPermission, type WorkloadMember, type WorkloadSourcePort } from '../../workload/service.js'
 import type { Deps } from '../deps.js'
-import { listQuery, readDoc } from '../deps.js'
+import { evaluateCapabilities, listQuery, readDoc } from '../deps.js'
 import { orgPath } from '../deps.js'
 import type { HandlerRegistry } from '../registry.js'
 import { requireString } from '../registry.js'
@@ -104,7 +104,10 @@ export function createWorkloadHandlers(deps: Deps): HandlerRegistry {
         ...(Array.isArray(input.cursor) ? { cursor: input.cursor } : {}),
       })
       const page = await deps.queries.list<Record<string, unknown>>(`v2Organizations/${context.organizationId}/capacity_plan`, query)
-      return { items: page.items, nextCursor: page.nextCursor }
+      const capabilities = await evaluateCapabilities(deps, context.principal, context.organizationId, {
+        viewEmployeeNames: 'employment.view', rebuild: 'workload.manage',
+      })
+      return { items: page.items, nextCursor: page.nextCursor, capabilities }
     },
     '/v1/workload/rebuild': (context, input) => service.rebuild({
       organizationId: context.organizationId, principal: context.principal,

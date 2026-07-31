@@ -11,7 +11,7 @@ interface RawMeasurement { id?: unknown; name?: unknown; value?: unknown; unit?:
  * organization scope, maps the real measurements into metrics, and returns empty export jobs / fields
  * with fail-closed capabilities (backend still enforces). Tracked as audit M1/M2.
  */
-function toReportSnapshot(raw: { items?: readonly RawMeasurement[] }, periodStart: string): ReportSnapshot {
+function toReportSnapshot(raw: { items?: readonly RawMeasurement[]; capabilities?: ReportSnapshot['capabilities'] }, periodStart: string): ReportSnapshot {
   const metrics = (raw.items ?? []).map((row) => ({
     id: String(row.id ?? ''), name: typeof row.name === 'string' ? row.name : '',
     value: typeof row.value === 'number' ? row.value : null,
@@ -21,6 +21,6 @@ function toReportSnapshot(raw: { items?: readonly RawMeasurement[] }, periodStar
     status: (row.status === 'complete' ? 'complete' : 'no_data') as 'complete' | 'no_data',
     visibility: (row.visibility === 'performance_sensitive' ? 'performance_sensitive' : 'operational') as 'operational' | 'performance_sensitive',
   }))
-  return { periodStart, periodEnd: periodStart, metrics, exportJobs: [], capabilities: { export: false, viewPerformance: false, viewFinancial: false }, allowedExportFields: [] }
+  return { periodStart, periodEnd: periodStart, metrics, exportJobs: [], capabilities: raw.capabilities ?? { export: false, viewPerformance: false, viewFinancial: false }, allowedExportFields: [] }
 }
 export const reportClient: ReportClient = { load: async (organizationId, periodStart) => toReportSnapshot(await post('/v1/reports/query', { organizationId, subjectType: 'organization', subjectId: organizationId, periodStart, limit: 50 }), periodStart), requestExport: (organizationId, input) => post('/v1/reports/export', { organizationId, ...input }) }

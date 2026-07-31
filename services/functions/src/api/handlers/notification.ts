@@ -1,7 +1,7 @@
 import { tenantDocumentPath } from '@zamam/firestore'
 import { NotificationCommandService, buildNotificationInboxQuery, type NotificationLookupPort } from '../../notification/service.js'
 import type { Deps } from '../deps.js'
-import { readDoc } from '../deps.js'
+import { evaluateCapabilities, readDoc } from '../deps.js'
 import type { HandlerRegistry } from '../registry.js'
 import { requireNumber, requireString } from '../registry.js'
 
@@ -29,7 +29,10 @@ export function createNotificationHandlers(deps: Deps): HandlerRegistry {
         ...(Array.isArray(input.cursor) ? { cursor: input.cursor } : {}),
       })
       const page = await deps.queries.list<Record<string, unknown>>(`v2Organizations/${context.organizationId}/notification`, query)
-      return { items: page.items, nextCursor: page.nextCursor }
+      const capabilities = await evaluateCapabilities(deps, context.principal, context.organizationId, {
+        managePreferences: 'notification.manage_preferences',
+      })
+      return { items: page.items, nextCursor: page.nextCursor, capabilities }
     },
     '/v1/notifications/status': (context, input) => service.setStatus(
       metadata(context), requireString(input, 'notificationId'), requireNumber(input, 'expectedVersion'),

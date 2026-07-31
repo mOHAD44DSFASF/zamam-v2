@@ -60,7 +60,7 @@ interface RawClientRow { id?: unknown; name?: unknown; code?: unknown; industry?
  * into a valid snapshot; contacts empty, counts 0, capabilities fail closed (backend still enforces).
  * Tracked as audit M1/M2.
  */
-function toClientSnapshot(raw: { items?: readonly RawClientRow[] }): ClientManagementSnapshot {
+function toClientSnapshot(raw: { items?: readonly RawClientRow[]; capabilities?: ClientManagementSnapshot['capabilities'] }): ClientManagementSnapshot {
   const clients: ClientSummary[] = (raw.items ?? []).map((row) => ({
     id: String(row.id ?? ''), name: typeof row.name === 'string' ? row.name : '',
     code: typeof row.code === 'string' ? row.code : '',
@@ -68,7 +68,7 @@ function toClientSnapshot(raw: { items?: readonly RawClientRow[] }): ClientManag
     status: (typeof row.status === 'string' ? row.status : 'active') as ClientSummary['status'],
     activeProjectCount: 0,
   }))
-  return { clients, contacts: [], capabilities: { create: false, manage: false, manageContacts: false, archive: false } }
+  return { clients, contacts: [], capabilities: raw.capabilities ?? { create: false, manage: false, manageContacts: false, archive: false } }
 }
 
 export const clientManagementClient: ClientManagementClient = {

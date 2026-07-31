@@ -2,7 +2,7 @@ import { tenantCollectionPath } from '@zamam/firestore'
 import { EmployeeService, type EmployeeLifecyclePort, type InvitationLookupPort } from '../../employee/service.js'
 import { FirebaseEmployeeIdentityAdapter } from '../../employee/firebase-identity.js'
 import type { Deps } from '../deps.js'
-import { orgPath, readDoc } from '../deps.js'
+import { evaluateCapabilities, orgPath, readDoc, resolveNames } from '../deps.js'
 import type { HandlerRegistry } from '../registry.js'
 import { requireNumber, requireString } from '../registry.js'
 
@@ -83,11 +83,20 @@ export function createEmployeeHandlers(deps: Deps): HandlerRegistry {
         return {
           userId: doc.id, membershipStatus: doc.data().status,
           displayName: profile ? String(profile.displayName) : null,
+          employeeNumber: employment ? String(employment.employeeNumber ?? '') : '',
           jobTitle: employment ? String(employment.jobTitle) : null,
+          employmentType: employment && employment.employmentType === 'contractor' ? 'contractor' as const : 'employee' as const,
+          primaryDepartmentId: employment && typeof employment.primaryDepartmentId === 'string' ? employment.primaryDepartmentId : '',
           employmentStatus: employment ? String(employment.status) : null,
         }
       }))
-      return { items: rows }
+      // M2: resolve department names once for the whole page instead of showing raw ids.
+      const departmentNames = await resolveNames(deps, context.organizationId, 'department', rows.map((r) => r.primaryDepartmentId))
+      const items = rows.map((r) => ({ ...r, departmentName: departmentNames.get(r.primaryDepartmentId) ?? '' }))
+      const capabilities = await evaluateCapabilities(deps, context.principal, context.organizationId, {
+        invite: 'user.invite', update: 'user.update', disable: 'user.disable', viewHr: 'employment.view',
+      })
+      return { items, capabilities }
     },
     '/v1/employees/invite': (context, input) => service.invite(metadata(context), {
       email: requireString(input, 'email'), displayName: requireString(input, 'displayName'),

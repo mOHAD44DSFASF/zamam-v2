@@ -111,14 +111,14 @@ function toTimeEntry(row: RawTimeEntry): TimeEntrySummary {
     version: typeof row.version === 'number' ? row.version : 1,
   }
 }
-function toTimeSnapshot(raw: { items?: readonly RawTimeEntry[] }, periodStart: string): TimeSnapshot {
+function toTimeSnapshot(raw: { items?: readonly RawTimeEntry[]; capabilities?: TimeSnapshot['capabilities'] }, periodStart: string): TimeSnapshot {
   const rows = raw.items ?? []
   const runningRaw = rows.find((row) => row.timerState === 'running')
   return {
     timezone: 'Asia/Riyadh', periodStart, periodEnd: weekEnd(periodStart),
     runningEntry: runningRaw ? toTimeEntry(runningRaw) : null,
     entries: rows.map(toTimeEntry), timesheet: null, approvalQueue: [], projects: [],
-    capabilities: { track: false, submit: false, approve: false, viewBillable: false, requestCorrection: false },
+    capabilities: raw.capabilities ?? { track: false, submit: false, approve: false, viewBillable: false, requestCorrection: false },
   }
 }
 

@@ -64,14 +64,14 @@ interface RawTemplateRow { id?: unknown; name?: unknown; templateType?: unknown;
  * templates into a valid snapshot; schedules empty, capabilities fail closed (backend still enforces).
  * Tracked as audit M1/M2.
  */
-function toTemplateSnapshot(raw: { items?: readonly RawTemplateRow[] }): TemplateSnapshot {
+function toTemplateSnapshot(raw: { items?: readonly RawTemplateRow[]; capabilities?: TemplateSnapshot['capabilities'] }): TemplateSnapshot {
   const templates: WorkTemplateSummary[] = (raw.items ?? []).map((row) => ({
     id: String(row.id ?? ''), name: typeof row.name === 'string' ? row.name : '',
     templateType: (row.templateType === 'project' ? 'project' : 'task'),
     status: (typeof row.status === 'string' ? row.status : 'draft') as WorkTemplateSummary['status'],
     version: typeof row.version === 'number' ? row.version : 1, workflowName: null,
   }))
-  return { templates, schedules: [], capabilities: { create: false, publish: false, manageRecurrence: false } }
+  return { templates, schedules: [], capabilities: raw.capabilities ?? { create: false, publish: false, manageRecurrence: false } }
 }
 
 export const templateClient: TemplateClient = {

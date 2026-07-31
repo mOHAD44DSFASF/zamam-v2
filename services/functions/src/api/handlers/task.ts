@@ -2,7 +2,7 @@ import { tenantDocumentPath } from '@zamam/firestore'
 import { TaskService, type TaskReferencePort } from '../../task/service.js'
 import { TaskQueryService, SavedTaskViewService, type TaskQueryStore, type TaskSearchPort, type TaskViewScope } from '../../task/query.js'
 import type { Deps } from '../deps.js'
-import { listQuery } from '../deps.js'
+import { evaluateCapabilities, listQuery } from '../deps.js'
 import type { HandlerRegistry } from '../registry.js'
 import { requireNumber, requireString } from '../registry.js'
 
@@ -41,7 +41,7 @@ export function createTaskHandlers(deps: Deps): HandlerRegistry {
   })
 
   return {
-    '/v1/tasks/query': (context, input) => {
+    '/v1/tasks/query': async (context, input) => {
       const scopeInput = input.scope as { type?: string; userId?: string; teamId?: string; projectId?: string } | undefined
       const scope: TaskViewScope = scopeInput?.type === 'self'
         ? { type: 'self', userId: context.principal.userId }
@@ -50,11 +50,16 @@ export function createTaskHandlers(deps: Deps): HandlerRegistry {
           : scopeInput?.type === 'project' && typeof scopeInput.projectId === 'string'
             ? { type: 'project', projectId: scopeInput.projectId }
             : { type: 'organization' }
-      return queryService.list(context.principal, {
+      const page = await queryService.list(context.principal, {
         organizationId: context.organizationId, scope, filters: input.filters,
         ...(typeof input.limit === 'number' ? { limit: input.limit } : {}),
         ...(Array.isArray(input.cursor) ? { cursor: input.cursor } : {}),
       })
+      const capabilities = await evaluateCapabilities(deps, context.principal, context.organizationId, {
+        create: 'task.create', update: 'task.update', transition: 'task.transition',
+        assign: 'task.assign', reopen: 'task.reopen', archive: 'task.archive', saveView: 'saved_view.create',
+      })
+      return { ...page, capabilities }
     },
     '/v1/tasks/create': (context, input) => service.create(metadata(context), {
       id: requireString(input, 'id'), projectId: requireString(input, 'projectId'),

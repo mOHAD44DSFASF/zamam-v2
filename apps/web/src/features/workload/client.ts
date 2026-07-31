@@ -81,7 +81,7 @@ interface RawCapacityRow {
  * plans (they come from WorkloadProjectionService.rebuild), so this renders an empty projection until that
  * read path is built. capabilities fail closed (backend still enforces). Tracked as audit M1/M3.
  */
-function toWorkloadSnapshot(raw: { items?: readonly RawCapacityRow[] }, scope: WorkloadScope, periodStart: string): WorkloadSnapshot {
+function toWorkloadSnapshot(raw: { items?: readonly RawCapacityRow[]; capabilities?: WorkloadSnapshot['capabilities'] }, scope: WorkloadScope, periodStart: string): WorkloadSnapshot {
   const rows: WorkloadRow[] = (raw.items ?? []).map((row) => ({
     userId: String(row.userId ?? ''), displayName: typeof row.displayName === 'string' ? row.displayName : '',
     status: (typeof row.status === 'string' ? row.status : 'known') as WorkloadRow['status'],
@@ -105,7 +105,7 @@ function toWorkloadSnapshot(raw: { items?: readonly RawCapacityRow[] }, scope: W
     totalAvailableMinutes: rows.reduce((s, r) => s + (r.availableMinutes ?? 0), 0),
     totalAllocatedMinutes: rows.reduce((s, r) => s + r.allocatedMinutes, 0),
   }
-  return { periodStart, periodEnd, scope, availableScopes: [scope], rows, summary, capabilities: { viewEmployeeNames: false, rebuild: false } }
+  return { periodStart, periodEnd, scope, availableScopes: [scope], rows, summary, capabilities: raw.capabilities ?? { viewEmployeeNames: false, rebuild: false } }
 }
 
 export const workloadClient: WorkloadClient = {

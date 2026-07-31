@@ -2,7 +2,7 @@ import { tenantDocumentPath } from '@zamam/firestore'
 import { AttendanceService, type AttendanceLookup } from '../../attendance/service.js'
 import { LeaveService, type LeaveApproverResolver, type LeaveLookup } from '../../leave/service.js'
 import type { Deps } from '../deps.js'
-import { listQuery, orgPath, readDoc } from '../deps.js'
+import { evaluateCapabilities, listQuery, orgPath, readDoc } from '../deps.js'
 import type { HandlerRegistry } from '../registry.js'
 import { requireNumber, requireString } from '../registry.js'
 
@@ -60,7 +60,11 @@ export function createAttendanceLeaveHandlers(deps: Deps): HandlerRegistry {
         ],
         orderBy: [{ field: 'date', direction: 'desc' }], limit: 100,
       })
-      return { items: page.items }
+      const capabilities = await evaluateCapabilities(deps, context.principal, context.organizationId, {
+        recordAttendance: 'attendance.record', requestLeave: 'leave.request',
+        approveLeave: 'leave.approve', viewTeamAttendance: 'attendance.view_team',
+      })
+      return { items: page.items, capabilities }
     },
     '/v1/attendance/record': (context, input) => attendance.record(metadata(context), {
       userId: requireString(input, 'userId'), workDate: requireString(input, 'workDate'),

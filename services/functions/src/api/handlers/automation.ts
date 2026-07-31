@@ -1,5 +1,5 @@
 import type { Deps } from '../deps.js'
-import { listQuery, orgPath, readDoc } from '../deps.js'
+import { evaluateCapabilities, listQuery, orgPath, readDoc } from '../deps.js'
 import type { HandlerRegistry } from '../registry.js'
 import { requireString } from '../registry.js'
 
@@ -11,7 +11,10 @@ export function createAutomationHandlers(deps: Deps): HandlerRegistry {
         filters: [{ field: 'status', operator: 'in', value: ['draft', 'active', 'paused'] }],
         orderBy: [{ field: 'updatedAt', direction: 'desc' }], limit: 50,
       })
-      return { items: page.items }
+      const capabilities = await evaluateCapabilities(deps, context.principal, context.organizationId, {
+        create: 'automation.create', manage: 'automation.manage', publish: 'automation.publish', cancel: 'automation.cancel',
+      })
+      return { items: page.items, capabilities }
     },
     '/v1/automations/status': async (context, input) => {
       await deps.authorization.require(context.principal, { permission: 'automation.view', organizationId: context.organizationId })

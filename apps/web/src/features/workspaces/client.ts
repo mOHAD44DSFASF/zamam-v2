@@ -48,7 +48,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return envelope.data
 }
 
-interface RawWorkspaceRow { id?: unknown; name?: unknown; status?: unknown; visibility?: unknown; version?: unknown }
+interface RawWorkspaceRow { id?: unknown; name?: unknown; status?: unknown; visibility?: unknown; version?: unknown; projectName?: unknown; teamName?: unknown }
 
 /**
  * `/v1/workspaces/query` returns `{ items }` — raw workspace docs, not the WorkspaceSnapshot (project/
@@ -56,15 +56,17 @@ interface RawWorkspaceRow { id?: unknown; name?: unknown; status?: unknown; visi
  * maps the real workspaces into a valid snapshot; derived names/counts placeholder, pick-lists empty,
  * capabilities fail closed (backend still enforces). Tracked as audit M1/M2.
  */
-function toWorkspaceSnapshot(raw: { items?: readonly RawWorkspaceRow[] }): WorkspaceSnapshot {
+function toWorkspaceSnapshot(raw: { items?: readonly RawWorkspaceRow[]; capabilities?: WorkspaceSnapshot['capabilities'] }): WorkspaceSnapshot {
   const workspaces: WorkspaceSummary[] = (raw.items ?? []).map((row) => ({
     id: String(row.id ?? ''), name: typeof row.name === 'string' ? row.name : '',
     status: (typeof row.status === 'string' ? row.status : 'active') as WorkspaceSummary['status'],
     visibility: (typeof row.visibility === 'string' ? row.visibility : 'private') as WorkspaceSummary['visibility'],
-    projectName: null, teamName: null, activeMemberCount: 0, openTaskCount: 0,
+    projectName: typeof row.projectName === 'string' ? row.projectName : null,
+    teamName: typeof row.teamName === 'string' ? row.teamName : null,
+    activeMemberCount: 0, openTaskCount: 0,
     version: typeof row.version === 'number' ? row.version : 1,
   }))
-  return { workspaces, projects: [], teams: [], capabilities: { create: false, manageMembers: false, archive: false } }
+  return { workspaces, projects: [], teams: [], capabilities: raw.capabilities ?? { create: false, manageMembers: false, archive: false } }
 }
 
 export const workspaceClient: WorkspaceClient = {

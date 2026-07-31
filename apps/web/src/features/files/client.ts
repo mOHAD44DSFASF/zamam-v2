@@ -71,7 +71,7 @@ interface RawFileRow {
  * files into a valid snapshot; provider reported unconfigured/local, capabilities fail closed (backend
  * still enforces). Tracked as audit M1/M2.
  */
-function toFileSnapshot(raw: { items?: readonly RawFileRow[] }): FileLibrarySnapshot {
+function toFileSnapshot(raw: { items?: readonly RawFileRow[]; capabilities?: FileLibrarySnapshot['capabilities'] }): FileLibrarySnapshot {
   const files: FileSummary[] = (raw.items ?? []).map((row) => ({
     id: String(row.id ?? ''), displayName: typeof row.displayName === 'string' ? row.displayName : '',
     resourceType: (row.resourceType === 'project' ? 'project' : 'task'), resourceId: String(row.resourceId ?? ''),
@@ -83,7 +83,7 @@ function toFileSnapshot(raw: { items?: readonly RawFileRow[] }): FileLibrarySnap
     updatedAt: typeof row.updatedAt === 'string' ? row.updatedAt : '',
     version: typeof row.version === 'number' ? row.version : 1, canDownload: false, canDelete: false,
   }))
-  return { files, provider: { name: 'local', configured: false }, capabilities: { upload: false, shareWithClient: false, restore: false } }
+  return { files, provider: { name: 'local', configured: false }, capabilities: raw.capabilities ?? { upload: false, shareWithClient: false, restore: false } }
 }
 
 export const fileLibraryClient: FileLibraryClient = {

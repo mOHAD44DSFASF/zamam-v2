@@ -62,7 +62,8 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 }
 
 interface RawProjectRow {
-  id?: unknown; clientId?: unknown; name?: unknown; code?: unknown; status?: unknown
+  id?: unknown; clientId?: unknown; clientName?: unknown; managerName?: unknown; departmentName?: unknown
+  name?: unknown; code?: unknown; status?: unknown
   startsOn?: unknown; dueOn?: unknown; clientVisible?: unknown; version?: unknown
 }
 
@@ -73,12 +74,14 @@ interface RawProjectRow {
  * valid snapshot; derived names render as placeholders, pick-lists empty, capabilities fail closed
  * (backend still enforces). Tracked as audit M1/M2.
  */
-function toProjectSnapshot(raw: { items?: readonly RawProjectRow[] }): ProjectManagementSnapshot {
+function toProjectSnapshot(raw: { items?: readonly RawProjectRow[]; capabilities?: ProjectManagementSnapshot['capabilities'] }): ProjectManagementSnapshot {
   const projects: ProjectSummary[] = (raw.items ?? []).map((row) => ({
-    id: String(row.id ?? ''), clientId: String(row.clientId ?? ''), clientName: String(row.clientId ?? ''),
+    id: String(row.id ?? ''), clientId: String(row.clientId ?? ''),
+    clientName: typeof row.clientName === 'string' && row.clientName ? row.clientName : String(row.clientId ?? ''),
     name: typeof row.name === 'string' ? row.name : '', code: typeof row.code === 'string' ? row.code : '',
     status: (typeof row.status === 'string' ? row.status : 'draft') as ProjectSummary['status'],
-    managerName: '', departmentName: null,
+    managerName: typeof row.managerName === 'string' ? row.managerName : '',
+    departmentName: typeof row.departmentName === 'string' ? row.departmentName : null,
     startsOn: typeof row.startsOn === 'string' ? row.startsOn : null,
     dueOn: typeof row.dueOn === 'string' ? row.dueOn : null,
     clientVisible: Boolean(row.clientVisible), activeMemberCount: 0, openTaskCount: 0,
@@ -86,7 +89,7 @@ function toProjectSnapshot(raw: { items?: readonly RawProjectRow[] }): ProjectMa
   }))
   return {
     projects, clients: [], departments: [], managers: [],
-    capabilities: { create: false, manage: false, manageMembers: false, archive: false, viewFinancial: false, manageFinancial: false },
+    capabilities: raw.capabilities ?? { create: false, manage: false, manageMembers: false, archive: false, viewFinancial: false, manageFinancial: false },
   }
 }
 
