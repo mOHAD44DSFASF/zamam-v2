@@ -120,11 +120,22 @@ affected services' in-memory test fakes as regression coverage.
 - **L2** (Low) — AI/malware-scanner/email real providers remain unconfigured by design (BLK-002); out
   of scope per standing instructions.
 
-## Status tracker (updated in Phase 2/3)
+## Status tracker (final — Phase 3)
 
-| ID | Status |
-|---|---|
-| A1–A10 | see Phase 2 |
-| B1–B3 | see Phase 2 |
-| C1–C13 | see Phase 2 |
-| M1–M3, L1–L2 | Deferred (documented) |
+Two additional read-after-write bugs (C14 review.expire, C15/C16 time.submit/decide loops, C17
+workload.rebuild loop) were surfaced during Phase 2 by the test-fake ordering enforcement and the
+loop-carried scanner — the static scanner alone missed the loop-carried ones. All fixed.
+
+| ID | Status | Verification |
+|---|---|---|
+| A1–A10 (page-load crashes) | **Fixed** | Live Playwright: all 18 routes load with 0 crashes/console errors/failed requests |
+| B1–B3 (query-param 400s) | **Fixed** | Live Playwright: /time, /attendance, /reports load cleanly (no 400) |
+| C1–C17 (read-after-write) | **Fixed** | 463/463 tests with real-Firestore-rule enforcement in 16 fakes; createTeam (C1) driven live through the API against the real Firestore emulator → 200, no read-after-write error |
+| M1 — real capabilities + auxiliary pick-lists composed server-side | **Deferred (Medium)** | pages load & view; create/manage buttons hidden pending backend composition |
+| M2 — derived display fields (names, counts, provider status, proposal grouping) | **Deferred (Medium)** | rendered as placeholders/empty by the adapters |
+| M3 — real `/workload` capacity projection read path | **Deferred (Medium)** | renders empty projection until built |
+| L1 — `template.runOccurrence` materializer read ordering | **Deferred (Low)** | worker-only, unconfigured stub; front-load reads when built |
+| L2 — AI/malware/email real providers | **Deferred (Low)** | unconfigured by design (BLK-002); out of scope |
+
+No Critical/High item was left unfixed. The Medium/Low items are genuine follow-ups (feature completion,
+not defects that crash or hard-block core usage), documented here rather than omitted.
