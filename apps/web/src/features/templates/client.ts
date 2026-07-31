@@ -56,8 +56,26 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return envelope.data
 }
 
+interface RawTemplateRow { id?: unknown; name?: unknown; templateType?: unknown; status?: unknown; version?: unknown }
+
+/**
+ * `/v1/templates/query` returns `{ items }` — raw work_template docs, not the TemplateSnapshot
+ * (recurrence schedules, workflow names, capability flags) this screen expects. Adapter maps the real
+ * templates into a valid snapshot; schedules empty, capabilities fail closed (backend still enforces).
+ * Tracked as audit M1/M2.
+ */
+function toTemplateSnapshot(raw: { items?: readonly RawTemplateRow[] }): TemplateSnapshot {
+  const templates: WorkTemplateSummary[] = (raw.items ?? []).map((row) => ({
+    id: String(row.id ?? ''), name: typeof row.name === 'string' ? row.name : '',
+    templateType: (row.templateType === 'project' ? 'project' : 'task'),
+    status: (typeof row.status === 'string' ? row.status : 'draft') as WorkTemplateSummary['status'],
+    version: typeof row.version === 'number' ? row.version : 1, workflowName: null,
+  }))
+  return { templates, schedules: [], capabilities: { create: false, publish: false, manageRecurrence: false } }
+}
+
 export const templateClient: TemplateClient = {
-  load: (organizationId) => post('/v1/templates/query', { organizationId, limit: 50 }),
+  load: async (organizationId) => toTemplateSnapshot(await post('/v1/templates/query', { organizationId, limit: 50 })),
   create: (organizationId, input) => post('/v1/templates/create', {
     organizationId,
     id: crypto.randomUUID(),

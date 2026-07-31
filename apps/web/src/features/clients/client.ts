@@ -52,8 +52,27 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return envelope.data
 }
 
+interface RawClientRow { id?: unknown; name?: unknown; code?: unknown; industry?: unknown; status?: unknown }
+
+/**
+ * `/v1/clients/query` returns `{ items: [...] }` — raw client docs, not the ClientManagementSnapshot
+ * (contacts, capability flags, active-project counts) this screen expects. Adapter maps the real clients
+ * into a valid snapshot; contacts empty, counts 0, capabilities fail closed (backend still enforces).
+ * Tracked as audit M1/M2.
+ */
+function toClientSnapshot(raw: { items?: readonly RawClientRow[] }): ClientManagementSnapshot {
+  const clients: ClientSummary[] = (raw.items ?? []).map((row) => ({
+    id: String(row.id ?? ''), name: typeof row.name === 'string' ? row.name : '',
+    code: typeof row.code === 'string' ? row.code : '',
+    industry: typeof row.industry === 'string' ? row.industry : null,
+    status: (typeof row.status === 'string' ? row.status : 'active') as ClientSummary['status'],
+    activeProjectCount: 0,
+  }))
+  return { clients, contacts: [], capabilities: { create: false, manage: false, manageContacts: false, archive: false } }
+}
+
 export const clientManagementClient: ClientManagementClient = {
-  load: (organizationId) => post('/v1/clients/query', { organizationId }),
+  load: async (organizationId) => toClientSnapshot(await post('/v1/clients/query', { organizationId })),
   create: (organizationId, input) => post('/v1/clients/create', { organizationId, ...input }),
   addContact: (organizationId, input) => post('/v1/clients/contacts/create', { organizationId, ...input }),
   setEligibility: (organizationId, input) => post('/v1/clients/contacts/eligibility', { organizationId, ...input }),

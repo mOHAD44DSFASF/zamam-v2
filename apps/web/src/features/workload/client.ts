@@ -67,11 +67,52 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   }
   return envelope.data
 }
+interface RawCapacityRow {
+  userId?: unknown; displayName?: unknown; status?: unknown; scheduledMinutes?: unknown; absenceMinutes?: unknown
+  availableMinutes?: unknown; allocatedMinutes?: unknown; remainingMinutes?: unknown; utilizationPercent?: unknown
+  assignmentCount?: unknown; unknownAssignmentCount?: unknown; overlapCount?: unknown; reasons?: unknown
+  calculatedAt?: unknown; periodEnd?: unknown
+}
+
+/**
+ * `/v1/workload/query` returns `{ items, nextCursor }` — raw capacity_plan docs, not the WorkloadSnapshot
+ * (period window, scope pick-list, aggregate summary, capability flags) this screen expects. Adapter maps
+ * the real rows into a valid snapshot and computes the summary from them; a fresh org has no capacity
+ * plans (they come from WorkloadProjectionService.rebuild), so this renders an empty projection until that
+ * read path is built. capabilities fail closed (backend still enforces). Tracked as audit M1/M3.
+ */
+function toWorkloadSnapshot(raw: { items?: readonly RawCapacityRow[] }, scope: WorkloadScope, periodStart: string): WorkloadSnapshot {
+  const rows: WorkloadRow[] = (raw.items ?? []).map((row) => ({
+    userId: String(row.userId ?? ''), displayName: typeof row.displayName === 'string' ? row.displayName : '',
+    status: (typeof row.status === 'string' ? row.status : 'known') as WorkloadRow['status'],
+    scheduledMinutes: typeof row.scheduledMinutes === 'number' ? row.scheduledMinutes : null,
+    absenceMinutes: typeof row.absenceMinutes === 'number' ? row.absenceMinutes : 0,
+    availableMinutes: typeof row.availableMinutes === 'number' ? row.availableMinutes : null,
+    allocatedMinutes: typeof row.allocatedMinutes === 'number' ? row.allocatedMinutes : 0,
+    remainingMinutes: typeof row.remainingMinutes === 'number' ? row.remainingMinutes : null,
+    utilizationPercent: typeof row.utilizationPercent === 'number' ? row.utilizationPercent : null,
+    assignmentCount: typeof row.assignmentCount === 'number' ? row.assignmentCount : 0,
+    unknownAssignmentCount: typeof row.unknownAssignmentCount === 'number' ? row.unknownAssignmentCount : 0,
+    overlapCount: typeof row.overlapCount === 'number' ? row.overlapCount : 0,
+    reasons: Array.isArray(row.reasons) ? row.reasons.map(String) : [],
+    calculatedAt: typeof row.calculatedAt === 'string' ? row.calculatedAt : '',
+  }))
+  const periodEnd = (raw.items ?? []).map((r) => (typeof r.periodEnd === 'string' ? r.periodEnd : '')).find(Boolean) ?? periodStart
+  const summary = {
+    knownPeople: rows.filter((r) => r.status !== 'unknown').length,
+    unknownPeople: rows.filter((r) => r.status === 'unknown').length,
+    overallocatedPeople: rows.filter((r) => r.remainingMinutes !== null && r.remainingMinutes < 0).length,
+    totalAvailableMinutes: rows.reduce((s, r) => s + (r.availableMinutes ?? 0), 0),
+    totalAllocatedMinutes: rows.reduce((s, r) => s + r.allocatedMinutes, 0),
+  }
+  return { periodStart, periodEnd, scope, availableScopes: [scope], rows, summary, capabilities: { viewEmployeeNames: false, rebuild: false } }
+}
+
 export const workloadClient: WorkloadClient = {
-  load: (organizationId, scope, periodStart) =>
-    post('/v1/workload/query', {
+  load: async (organizationId, scope, periodStart) =>
+    toWorkloadSnapshot(await post('/v1/workload/query', {
       organizationId, scopeType: scope.type, scopeId: scope.id, periodStart, limit: 50,
-    }),
+    }), scope, periodStart),
   rebuild: (organizationId, scope, periodStart, periodEnd) =>
     post('/v1/workload/rebuild', {
       organizationId, scopeType: scope.type, scopeId: scope.id, periodStart, periodEnd,

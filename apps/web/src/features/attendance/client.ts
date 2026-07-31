@@ -24,8 +24,27 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   if (!response.ok || envelope.error || envelope.data === undefined) throw new Error(envelope.error?.code ?? 'ATTENDANCE_REQUEST_FAILED')
   return envelope.data
 }
+/**
+ * `/v1/attendance/overview` requires periodStart/periodEnd (audit B2 400 root cause — the page sent
+ * neither) and returns `{ items }` (attendance_record docs), not the AttendanceLeaveSnapshot (today's
+ * status, leave types, requests, approval queue) this screen composes. That composition doesn't exist
+ * server-side, so this sends a trailing-35-day window to satisfy the handler and returns an empty,
+ * non-crashing snapshot (capabilities fail closed — backend still enforces). Tracked as audit M1/M2.
+ */
+function trailingWindow(): { periodStart: string; periodEnd: string } {
+  const end = new Date()
+  const start = new Date(end.getTime() - 35 * 86_400_000)
+  return { periodStart: start.toISOString().slice(0, 10), periodEnd: end.toISOString().slice(0, 10) }
+}
+function emptyAttendanceSnapshot(): AttendanceLeaveSnapshot {
+  return { today: null, leaveTypes: [], myRequests: [], approvalQueue: [], capabilities: { recordAttendance: false, requestLeave: false, approveLeave: false, viewTeamAttendance: false } }
+}
+
 export const attendanceLeaveClient: AttendanceLeaveClient = {
-  load: (organizationId) => post('/v1/attendance/overview', { organizationId }),
+  load: async (organizationId) => {
+    await post('/v1/attendance/overview', { organizationId, ...trailingWindow() })
+    return emptyAttendanceSnapshot()
+  },
   record: (organizationId, input) => post('/v1/attendance/record', { organizationId, ...input }),
   requestLeave: (organizationId, input) => post('/v1/leave/request', { organizationId, ...input }),
   decideLeave: (organizationId, requestId, expectedVersion, decision, reason) => post('/v1/leave/decide', { organizationId, requestId, expectedVersion, decision, ...(reason ? { reason } : {}) }),

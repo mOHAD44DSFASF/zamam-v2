@@ -49,8 +49,33 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   if (!response.ok || envelope.error || envelope.data === undefined) throw new Error(envelope.error?.code ?? 'AI_REQUEST_FAILED')
   return envelope.data
 }
+interface RawAIRequest {
+  id?: unknown; purpose?: unknown; status?: unknown; summary?: unknown; createdAt?: unknown
+}
+
+/**
+ * `/v1/ai/query` returns `{ requests, proposals }` — raw docs, not the AISnapshot (provider/policy
+ * status, capability flags) this screen expects. The AI provider is unconfigured by design (BLK-002), so
+ * this adapter reports it disabled and maps the request history; proposal grouping and capability flags
+ * fail closed (backend still enforces). Tracked as audit M1/M2/L2.
+ */
+function toAISnapshot(raw: { requests?: readonly RawAIRequest[] }): AISnapshot {
+  const requests: AIRequestSummary[] = (raw.requests ?? []).map((row) => ({
+    id: String(row.id ?? ''), purpose: (typeof row.purpose === 'string' ? row.purpose : 'summarize') as AIRequestSummary['purpose'],
+    status: (typeof row.status === 'string' ? row.status : 'completed') as AIRequestSummary['status'],
+    summary: typeof row.summary === 'string' ? row.summary : null,
+    createdAt: typeof row.createdAt === 'string' ? row.createdAt : '', proposals: [],
+  }))
+  return {
+    provider: { configured: false, mode: 'disabled', name: 'disabled' },
+    policy: { enabled: false, proposalOnly: true, retentionHours: 72, allowedClassifications: [] },
+    capabilities: { request: false, approveProposal: false, viewHistory: true },
+    requests,
+  }
+}
+
 export const aiClient: AIClient = {
-  load: (organizationId) => post('/v1/ai/query', { organizationId, limit: 20 }),
+  load: async (organizationId) => toAISnapshot(await post('/v1/ai/query', { organizationId, limit: 20 })),
   request: (organizationId, input) => post('/v1/ai/request', { organizationId, ...input }),
   decide: (organizationId, input) => post('/v1/ai/proposals/decide', { organizationId, ...input }),
 }

@@ -56,8 +56,31 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return envelope.data
 }
 
+interface RawEmployeeRow {
+  userId?: unknown; displayName?: unknown; jobTitle?: unknown; employmentStatus?: unknown
+}
+
+/**
+ * `/v1/employees/query` returns `{ items: [...] }` — membership rows, not the enriched
+ * EmployeeDirectorySnapshot this screen expects (department names, employee numbers, capability flags).
+ * That composition doesn't exist server-side yet, so this adapter maps the real rows into a valid,
+ * non-crashing snapshot: employee-number/department are rendered as placeholders, `departments` is empty
+ * (the create-form dropdown is empty until the backend composes it), and capabilities fail closed
+ * (create/manage buttons hidden — the backend still enforces every command). Tracked as audit M1/M2.
+ */
+function toEmployeeSnapshot(raw: { items?: readonly RawEmployeeRow[] }): EmployeeDirectorySnapshot {
+  const items: EmployeeDirectoryItem[] = (raw.items ?? []).map((row) => ({
+    userId: String(row.userId ?? ''),
+    displayName: typeof row.displayName === 'string' ? row.displayName : '',
+    employeeNumber: '', jobTitle: typeof row.jobTitle === 'string' ? row.jobTitle : '',
+    departmentId: '', departmentName: '', employmentType: 'employee',
+    status: (typeof row.employmentStatus === 'string' ? row.employmentStatus : 'active') as EmployeeDirectoryItem['status'],
+  }))
+  return { items, departments: [], capabilities: { invite: false, update: false, disable: false, viewHr: false } }
+}
+
 export const employeeDirectoryClient: EmployeeDirectoryClient = {
-  load: (organizationId) => post('/v1/employees/query', { organizationId }),
+  load: async (organizationId) => toEmployeeSnapshot(await post('/v1/employees/query', { organizationId })),
   invite: (organizationId, input) => post('/v1/employees/invite', { organizationId, ...input }),
   disable: (organizationId, userId, reason) => post('/v1/employees/disable', { organizationId, userId, reason }),
 }

@@ -60,9 +60,33 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   }
   return envelope.data
 }
+interface RawNotificationRow {
+  id?: unknown; title?: unknown; preview?: unknown; status?: unknown; critical?: unknown
+  createdAt?: unknown; resourceType?: unknown; resourceId?: unknown; version?: unknown
+}
+
+/**
+ * `/v1/notifications/query` returns `{ items, nextCursor }` — raw notification docs, not the
+ * NotificationSnapshot (preferences, email-provider status, capability flags) this screen expects.
+ * Adapter maps the real notifications into a valid snapshot; preferences empty, provider unconfigured,
+ * capabilities fail closed (backend still enforces). Tracked as audit M1/M2.
+ */
+function toNotificationSnapshot(raw: { items?: readonly RawNotificationRow[] }): NotificationSnapshot {
+  const notifications: NotificationSummary[] = (raw.items ?? []).map((row) => ({
+    id: String(row.id ?? ''), title: typeof row.title === 'string' ? row.title : '',
+    preview: typeof row.preview === 'string' ? row.preview : '',
+    status: (row.status === 'read' ? 'read' : 'unread'), critical: Boolean(row.critical),
+    createdAt: typeof row.createdAt === 'string' ? row.createdAt : '',
+    resourceType: typeof row.resourceType === 'string' ? row.resourceType : null,
+    resourceId: typeof row.resourceId === 'string' ? row.resourceId : null,
+    version: typeof row.version === 'number' ? row.version : 1,
+  }))
+  return { notifications, preferences: [], emailProvider: { name: 'local', configured: false }, capabilities: { managePreferences: false } }
+}
+
 export const notificationClient: NotificationClient = {
-  load: (organizationId, status) =>
-    post('/v1/notifications/query', { organizationId, status, limit: 50 }),
+  load: async (organizationId, status) =>
+    toNotificationSnapshot(await post('/v1/notifications/query', { organizationId, status, limit: 50 })),
   setStatus: (organizationId, notificationId, expectedVersion, status) =>
     post('/v1/notifications/status', {
       organizationId, notificationId, expectedVersion, status,
