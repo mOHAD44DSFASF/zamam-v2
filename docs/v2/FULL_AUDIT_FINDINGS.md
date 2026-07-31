@@ -131,11 +131,28 @@ loop-carried scanner — the static scanner alone missed the loop-carried ones. 
 | A1–A10 (page-load crashes) | **Fixed** | Live Playwright: all 18 routes load with 0 crashes/console errors/failed requests |
 | B1–B3 (query-param 400s) | **Fixed** | Live Playwright: /time, /attendance, /reports load cleanly (no 400) |
 | C1–C17 (read-after-write) | **Fixed** | 463/463 tests with real-Firestore-rule enforcement in 16 fakes; createTeam (C1) driven live through the API against the real Firestore emulator → 200, no read-after-write error |
-| M1 — real capabilities + auxiliary pick-lists composed server-side | **Deferred (Medium)** | pages load & view; create/manage buttons hidden pending backend composition |
-| M2 — derived display fields (names, counts, provider status, proposal grouping) | **Deferred (Medium)** | rendered as placeholders/empty by the adapters |
-| M3 — real `/workload` capacity projection read path | **Deferred (Medium)** | renders empty projection until built |
+| M1 — real capabilities + auxiliary pick-lists composed server-side | **Fixed** (77cf87e, a8498a7) | Every read handler composes real capabilities via `evaluateCapabilities` (TrustedAuthorizationService); adapters read them; pick-lists (departments/clients/managers/projects/teams/workspaces) composed. Live: action buttons render; capability unit tests (authorized/unauthorized/per-resource) |
+| M2 — derived display fields (names, counts, provider status, proposal grouping) | **Fixed** (batch names) / **Partial** (77cf87e, a8498a7) | Batch `resolveNames` resolves employee department, project client/manager/department, workspace project/team names. Live-rendered. **Still placeholder** (documented below as M2b): task-row assignee names + subtask/checklist counts + workflow summary, and client active-project counts — heavier per-row joins |
+| M3 — `/workload` capacity projection read path | **Fixed** (a8498a7) | Root cause was the query ordering by `utilizationPercent`, which unknown rows omit → Firestore excluded them → always empty. Reordered by always-present `allocatedMinutes`+`userId`; index updated. Live: rebuild→query returns rows (was 0) |
 | L1 — `template.runOccurrence` materializer read ordering | **Deferred (Low)** | worker-only, unconfigured stub; front-load reads when built |
 | L2 — AI/malware/email real providers | **Deferred (Low)** | unconfigured by design (BLK-002); out of scope |
+
+## E. Findings from the action-focused re-audit (Steps 1/5)
+
+| ID | Area | Description | Severity | Status |
+|---|---|---|---|---|
+| E1 | create payloads | `clients.create`, `clients.addContact`, `projects.create` never sent the required `id` (others did) → the command `400`'d even with the button showing | High | **Fixed** (a8498a7) — generate `crypto.randomUUID()` |
+| E2 | error mapping | Business-rule state errors (`CLIENT_NOT_ACTIVE`, `TASK_PROJECT_NOT_ACTIVE`, `_INSUFFICIENT`, …) fell through `domainError` to a bare **500 INTERNAL_ERROR** instead of a 4xx | High | **Fixed** (a8498a7) — map to **409 CONFLICT**; regression test added |
+| E3 | lifecycle | New clients are `'lead'` and new projects `'draft'`, but **no UI/endpoint advanced them** → projects (need an active client) and tasks (need a planned/active project) could never be created | High | **Fixed** (a8498a7) — exposed `/v1/clients/transition` + `/v1/projects/transition` (wired to existing services) + activate buttons |
+| E4 | automations | The `/automations` page has **no create form** and the client has no create method (nor a `/v1/automations/create` backend endpoint) — automation authoring is unimplemented end-to-end | Medium | **Deferred** — genuine unbuilt feature (rule/trigger/action builder); larger than this pass. Documented, not hidden |
+| M2b | enrichment | Task-row assignee names, subtask/checklist counts, and workflow summary; client active-project counts — still placeholders (heavier per-row joins than the batch name resolution done for M2) | Medium | **Deferred** — documented |
+
+### Live end-to-end verification (Step 6)
+
+Playwright, logged in as Owner, created a record through the **UI** for 5 resource types and confirmed
+each persisted after a page reload: **workspace, client, employee, project, task** — the full
+`client → activate → project → approve-plan → task` dependency chain, zero page errors. Full click-through
+of all 18 routes: clean.
 
 No Critical/High item was left unfixed. The Medium/Low items are genuine follow-ups (feature completion,
 not defects that crash or hard-block core usage), documented here rather than omitted.
