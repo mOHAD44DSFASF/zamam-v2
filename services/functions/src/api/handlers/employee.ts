@@ -2,7 +2,7 @@ import { tenantCollectionPath } from '@zamam/firestore'
 import { EmployeeService, type EmployeeLifecyclePort, type InvitationLookupPort } from '../../employee/service.js'
 import { FirebaseEmployeeIdentityAdapter } from '../../employee/firebase-identity.js'
 import type { Deps } from '../deps.js'
-import { evaluateCapabilities, orgPath, readDoc, resolveNames } from '../deps.js'
+import { evaluateCapabilities, listQuery, orgPath, readDoc } from '../deps.js'
 import type { HandlerRegistry } from '../registry.js'
 import { requireNumber, requireString } from '../registry.js'
 
@@ -90,13 +90,18 @@ export function createEmployeeHandlers(deps: Deps): HandlerRegistry {
           employmentStatus: employment ? String(employment.status) : null,
         }
       }))
-      // M2: resolve department names once for the whole page instead of showing raw ids.
-      const departmentNames = await resolveNames(deps, context.organizationId, 'department', rows.map((r) => r.primaryDepartmentId))
-      const items = rows.map((r) => ({ ...r, departmentName: departmentNames.get(r.primaryDepartmentId) ?? '' }))
+      // Active departments — both to resolve row names and to populate the invite form's department picker.
+      const departmentPage = await listQuery(deps, context.organizationId, 'department', {
+        filters: [{ field: 'status', operator: '==', value: 'active' }],
+        orderBy: [{ field: 'name', direction: 'asc' }], limit: 100,
+      })
+      const departments = departmentPage.items.map((d) => ({ id: String(d.id), name: String(d.name) }))
+      const departmentNameById = new Map(departments.map((d) => [d.id, d.name]))
+      const items = rows.map((r) => ({ ...r, departmentName: departmentNameById.get(r.primaryDepartmentId) ?? '' }))
       const capabilities = await evaluateCapabilities(deps, context.principal, context.organizationId, {
         invite: 'user.invite', update: 'user.update', disable: 'user.disable', viewHr: 'employment.view',
       })
-      return { items, capabilities }
+      return { items, departments, capabilities }
     },
     '/v1/employees/invite': (context, input) => service.invite(metadata(context), {
       email: requireString(input, 'email'), displayName: requireString(input, 'displayName'),

@@ -60,11 +60,30 @@ export function createProjectHandlers(deps: Deps): HandlerRegistry {
         managerName: managerNames.get(String(r.managerUserId ?? '')) ?? '',
         departmentName: r.departmentId ? departmentNames.get(String(r.departmentId)) ?? null : null,
       }))
+      // Pick-lists for the create form: active clients, active departments, and active members (managers).
+      const [clientPage, departmentPage, membershipPage] = await Promise.all([
+        listQuery(deps, context.organizationId, 'client', {
+          filters: [{ field: 'status', operator: 'in', value: ['lead', 'active', 'paused'] }],
+          orderBy: [{ field: 'name', direction: 'asc' }], limit: 100,
+        }),
+        listQuery(deps, context.organizationId, 'department', {
+          filters: [{ field: 'status', operator: '==', value: 'active' }],
+          orderBy: [{ field: 'name', direction: 'asc' }], limit: 100,
+        }),
+        listQuery(deps, context.organizationId, 'organization_membership', {
+          filters: [{ field: 'status', operator: '==', value: 'active' }],
+          orderBy: [{ field: 'updatedAt', direction: 'desc' }], limit: 100,
+        }),
+      ])
+      const clients = clientPage.items.map((c) => ({ id: String(c.id), name: String(c.name) }))
+      const departments = departmentPage.items.map((d) => ({ id: String(d.id), name: String(d.name) }))
+      const managerProfiles = await resolveNames(deps, context.organizationId, 'user_profile', membershipPage.items.map((m) => String(m.userId)), 'displayName')
+      const managers = membershipPage.items.map((m) => ({ userId: String(m.userId), displayName: managerProfiles.get(String(m.userId)) ?? String(m.userId) }))
       const capabilities = await evaluateCapabilities(deps, context.principal, context.organizationId, {
         create: 'project.create', manage: 'project.manage', manageMembers: 'project.member.manage',
         archive: 'project.archive', viewFinancial: 'project.financial.view', manageFinancial: 'project.financial.manage',
       })
-      return { items, nextCursor: page.nextCursor, capabilities }
+      return { items, nextCursor: page.nextCursor, clients, departments, managers, capabilities }
     },
     '/v1/projects/create': (context, input) => service.create(metadata(context), {
       id: requireString(input, 'id'), clientId: requireString(input, 'clientId'), name: requireString(input, 'name'),
@@ -76,6 +95,10 @@ export function createProjectHandlers(deps: Deps): HandlerRegistry {
     }),
     '/v1/projects/client-visibility': (context, input) => service.setClientVisibility(
       metadata(context), requireString(input, 'projectId'), requireNumber(input, 'expectedVersion'), requireBoolean(input, 'clientVisible'),
+    ),
+    '/v1/projects/transition': (context, input) => service.transition(
+      metadata(context), requireString(input, 'projectId'), requireNumber(input, 'expectedVersion'),
+      requireString(input, 'targetStatus') as 'planned' | 'active' | 'on_hold' | 'completed' | 'cancelled',
     ),
   }
 }

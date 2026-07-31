@@ -56,7 +56,11 @@ interface RawWorkspaceRow { id?: unknown; name?: unknown; status?: unknown; visi
  * maps the real workspaces into a valid snapshot; derived names/counts placeholder, pick-lists empty,
  * capabilities fail closed (backend still enforces). Tracked as audit M1/M2.
  */
-function toWorkspaceSnapshot(raw: { items?: readonly RawWorkspaceRow[]; capabilities?: WorkspaceSnapshot['capabilities'] }): WorkspaceSnapshot {
+function toWorkspaceSnapshot(raw: {
+  items?: readonly RawWorkspaceRow[]
+  projects?: WorkspaceSnapshot['projects']; teams?: WorkspaceSnapshot['teams']
+  capabilities?: WorkspaceSnapshot['capabilities']
+}): WorkspaceSnapshot {
   const workspaces: WorkspaceSummary[] = (raw.items ?? []).map((row) => ({
     id: String(row.id ?? ''), name: typeof row.name === 'string' ? row.name : '',
     status: (typeof row.status === 'string' ? row.status : 'active') as WorkspaceSummary['status'],
@@ -66,7 +70,7 @@ function toWorkspaceSnapshot(raw: { items?: readonly RawWorkspaceRow[]; capabili
     activeMemberCount: 0, openTaskCount: 0,
     version: typeof row.version === 'number' ? row.version : 1,
   }))
-  return { workspaces, projects: [], teams: [], capabilities: raw.capabilities ?? { create: false, manageMembers: false, archive: false } }
+  return { workspaces, projects: raw.projects ?? [], teams: raw.teams ?? [], capabilities: raw.capabilities ?? { create: false, manageMembers: false, archive: false } }
 }
 
 export const workspaceClient: WorkspaceClient = {

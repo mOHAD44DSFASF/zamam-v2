@@ -65,7 +65,10 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return envelope.data
 }
 
-export interface RawTaskQueryResponse { items: readonly RawTaskRecord[]; nextCursor: unknown; capabilities?: TaskSnapshot['capabilities'] }
+export interface RawTaskQueryResponse {
+  items: readonly RawTaskRecord[]; nextCursor: unknown
+  projects?: TaskSnapshot['projects']; workspaces?: TaskSnapshot['workspaces']; capabilities?: TaskSnapshot['capabilities']
+}
 export interface RawTaskRecord {
   id?: unknown; projectId?: unknown; title?: unknown; description?: unknown
   status?: unknown; priority?: unknown; dueAt?: unknown; clientVisible?: unknown; version?: unknown
@@ -98,9 +101,12 @@ export function toTaskSnapshot(response: RawTaskQueryResponse): TaskSnapshot {
     version: typeof item.version === 'number' ? item.version : 1,
     subtaskCount: 0, completedSubtaskCount: 0, checklistCount: 0, completedChecklistCount: 0,
   }))
-  const projects = [...new Map(tasks.map((task) => [task.projectId, { id: task.projectId, name: task.projectName }])).values()]
+  // Prefer the real project pick-list from the handler; fall back to deriving from task rows.
+  const projects = response.projects && response.projects.length > 0
+    ? response.projects
+    : [...new Map(tasks.map((task) => [task.projectId, { id: task.projectId, name: task.projectName }])).values()]
   return {
-    tasks, projects, workspaces: [],
+    tasks, projects, workspaces: response.workspaces ?? [],
     capabilities: response.capabilities ?? { create: false, update: false, transition: false, assign: false, reopen: false, archive: false, saveView: false },
   }
 }

@@ -137,6 +137,32 @@ describe('trusted API foundation', () => {
       correlationId: 'correlation-456', idempotencyKey: 'idempotency-456',
     }), { organizationId: 'org-1', name: 'Workspace' })
   })
+
+  it('maps a domain state-violation error to 409 CONFLICT, not a bare 500', async () => {
+    // A command that throws a business-rule error (the resource is not in a valid state) must surface a
+    // 409 the caller can act on — previously these leaked as 500 INTERNAL_ERROR (e.g. project create for
+    // a lead client, task create on a draft project).
+    const { handler } = apiFixture({
+      routes: {
+        '/v1/projects/create': {
+          operation: 'project.create',
+          schema: z.object({ organizationId: z.string() }).passthrough(),
+          handle: vi.fn().mockRejectedValue(new Error('CLIENT_NOT_ACTIVE')),
+        },
+      },
+    })
+    const response = await handler(new Request('https://api.example.com/v1/projects/create', {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer test-token-123456', 'content-type': 'application/json',
+        'x-firebase-appcheck': 'test-app-check', 'x-correlation-id': 'correlation-789',
+        'x-idempotency-key': 'idempotency-789', origin: 'http://localhost:5173',
+      },
+      body: JSON.stringify({ organizationId: 'org-1' }),
+    }))
+    expect(response.status).toBe(409)
+    expect(await response.json()).toMatchObject({ error: { code: 'CONFLICT' } })
+  })
 })
 
 describe('resolveAllowedOrigins (CORS origin allowlist wiring)', () => {

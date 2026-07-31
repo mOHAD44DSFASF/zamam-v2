@@ -22,6 +22,11 @@ function domainError(error:unknown){
   if(code.includes('NOT_FOUND'))return new ApiError(404,'NOT_FOUND','Resource not found')
   if(code.includes('CONFLICT')||code.includes('STALE')||code.includes('IMMUTABLE')||code.includes('ALREADY_EXISTS'))return new ApiError(409,'CONFLICT','Resource state changed')
   if(code.startsWith('INVALID_')||code.endsWith('_REQUIRED')||code.includes('VALIDATION'))return new ApiError(400,'INVALID_REQUEST','Request validation failed')
+  // Business-rule state violations thrown by the domain services (e.g. CLIENT_NOT_ACTIVE,
+  // MEMBERSHIP_NOT_INVITED, TIMESHEET_NOT_SUBMITTED, LEAVE_BALANCE_INSUFFICIENT). These are the caller's
+  // fault (the resource is not in a state that allows the action), not a server fault — surface a 409 with
+  // the domain code instead of leaking a bare 500 INTERNAL_ERROR.
+  if(/_NOT_ACTIVE$|_NOT_SUBMITTED$|_NOT_INVITED$|_NOT_OPEN$|_NOT_ELIGIBLE$|_NOT_DEPARTABLE$|_NOT_SCHEDULABLE$|_NOT_PUBLISHED$|_NOT_DRAFT$|_STATE_INVALID$|_INSUFFICIENT$|_EXCEEDED$|_PROTECTED$|_RACE$|_READ_ONLY$/.test(code))return new ApiError(409,'CONFLICT','Resource state does not allow this action')
   return new ApiError(500,'INTERNAL_ERROR','The request could not be completed')
 }
 

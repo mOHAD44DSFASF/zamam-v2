@@ -82,8 +82,12 @@ export function buildWorkloadQuery(input: {
       { field: 'scopeId', operator: '==', value: input.scopeId },
       { field: 'periodStart', operator: '==', value: input.periodStart },
     ],
+    // Order by fields that are ALWAYS written on a capacity_plan (allocatedMinutes + userId). The previous
+    // orderBy 'utilizationPercent' silently dropped every unknown-utilization row: that field is omitted
+    // when null (the "unknown is not zero" policy), and Firestore excludes documents that lack an orderBy
+    // field — so a fresh org (people with no schedule => unknown) always returned an empty projection.
     orderBy: [
-      { field: 'utilizationPercent', direction: 'desc' },
+      { field: 'allocatedMinutes', direction: 'desc' },
       { field: 'userId', direction: 'asc' },
     ],
     limit, ...(input.cursor ? { cursor: input.cursor } : {}),

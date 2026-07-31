@@ -39,6 +39,7 @@ export interface ProjectManagementClient {
     startsOn?: string; dueOn?: string; clientVisible: boolean
   }): Promise<void>
   setClientVisibility(organizationId: string, projectId: string, expectedVersion: number, clientVisible: boolean): Promise<void>
+  transition(organizationId: string, projectId: string, expectedVersion: number, targetStatus: 'planned' | 'active' | 'on_hold' | 'completed' | 'cancelled'): Promise<void>
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
@@ -74,7 +75,13 @@ interface RawProjectRow {
  * valid snapshot; derived names render as placeholders, pick-lists empty, capabilities fail closed
  * (backend still enforces). Tracked as audit M1/M2.
  */
-function toProjectSnapshot(raw: { items?: readonly RawProjectRow[]; capabilities?: ProjectManagementSnapshot['capabilities'] }): ProjectManagementSnapshot {
+function toProjectSnapshot(raw: {
+  items?: readonly RawProjectRow[]
+  clients?: ProjectManagementSnapshot['clients']
+  departments?: ProjectManagementSnapshot['departments']
+  managers?: ProjectManagementSnapshot['managers']
+  capabilities?: ProjectManagementSnapshot['capabilities']
+}): ProjectManagementSnapshot {
   const projects: ProjectSummary[] = (raw.items ?? []).map((row) => ({
     id: String(row.id ?? ''), clientId: String(row.clientId ?? ''),
     clientName: typeof row.clientName === 'string' && row.clientName ? row.clientName : String(row.clientId ?? ''),
@@ -88,14 +95,16 @@ function toProjectSnapshot(raw: { items?: readonly RawProjectRow[]; capabilities
     version: typeof row.version === 'number' ? row.version : 1,
   }))
   return {
-    projects, clients: [], departments: [], managers: [],
+    projects, clients: raw.clients ?? [], departments: raw.departments ?? [], managers: raw.managers ?? [],
     capabilities: raw.capabilities ?? { create: false, manage: false, manageMembers: false, archive: false, viewFinancial: false, manageFinancial: false },
   }
 }
 
 export const projectManagementClient: ProjectManagementClient = {
   load: async (organizationId) => toProjectSnapshot(await post('/v1/projects/query', { organizationId, limit: 50 })),
-  create: (organizationId, input) => post('/v1/projects/create', { organizationId, ...input }),
+  create: (organizationId, input) => post('/v1/projects/create', { organizationId, id: crypto.randomUUID(), ...input }),
   setClientVisibility: (organizationId, projectId, expectedVersion, clientVisible) =>
     post('/v1/projects/client-visibility', { organizationId, projectId, expectedVersion, clientVisible }),
+  transition: (organizationId, projectId, expectedVersion, targetStatus) =>
+    post('/v1/projects/transition', { organizationId, projectId, expectedVersion, targetStatus }),
 }

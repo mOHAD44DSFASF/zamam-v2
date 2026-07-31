@@ -69,7 +69,7 @@ interface RawEmployeeRow {
  * (the create-form dropdown is empty until the backend composes it), and capabilities fail closed
  * (create/manage buttons hidden — the backend still enforces every command). Tracked as audit M1/M2.
  */
-function toEmployeeSnapshot(raw: { items?: readonly RawEmployeeRow[]; capabilities?: EmployeeDirectorySnapshot['capabilities'] }): EmployeeDirectorySnapshot {
+function toEmployeeSnapshot(raw: { items?: readonly RawEmployeeRow[]; departments?: EmployeeDirectorySnapshot['departments']; capabilities?: EmployeeDirectorySnapshot['capabilities'] }): EmployeeDirectorySnapshot {
   const items: EmployeeDirectoryItem[] = (raw.items ?? []).map((row) => ({
     userId: String(row.userId ?? ''),
     displayName: typeof row.displayName === 'string' ? row.displayName : '',
@@ -80,7 +80,7 @@ function toEmployeeSnapshot(raw: { items?: readonly RawEmployeeRow[]; capabiliti
     employmentType: row.employmentType === 'contractor' ? 'contractor' : 'employee',
     status: (typeof row.employmentStatus === 'string' ? row.employmentStatus : 'active') as EmployeeDirectoryItem['status'],
   }))
-  return { items, departments: [], capabilities: raw.capabilities ?? { invite: false, update: false, disable: false, viewHr: false } }
+  return { items, departments: raw.departments ?? [], capabilities: raw.capabilities ?? { invite: false, update: false, disable: false, viewHr: false } }
 }
 
 export const employeeDirectoryClient: EmployeeDirectoryClient = {

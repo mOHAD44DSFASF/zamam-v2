@@ -158,7 +158,9 @@ describe('workload projection boundary', () => {
       periodStart: '2026-08-03',
     })).toMatchObject({
       entityKind: 'capacity_plan', limit: 50,
-      orderBy: [{ field: 'utilizationPercent', direction: 'desc' }, { field: 'userId', direction: 'asc' }],
+      // Ordered by always-present fields so unknown-utilization rows are not silently excluded (see the
+      // comment in buildWorkloadQuery — Firestore drops docs lacking an orderBy field).
+      orderBy: [{ field: 'allocatedMinutes', direction: 'desc' }, { field: 'userId', direction: 'asc' }],
     })
     expect(() => buildWorkloadQuery({
       organizationId: 'org-1', scopeType: 'team', scopeId: 'team-1',

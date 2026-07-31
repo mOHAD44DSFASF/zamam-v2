@@ -55,11 +55,24 @@ export function createTaskHandlers(deps: Deps): HandlerRegistry {
         ...(typeof input.limit === 'number' ? { limit: input.limit } : {}),
         ...(Array.isArray(input.cursor) ? { cursor: input.cursor } : {}),
       })
+      // Pick-lists for the create form: active projects and workspaces.
+      const [projectPage, workspacePage] = await Promise.all([
+        listQuery(deps, context.organizationId, 'project', {
+          filters: [{ field: 'status', operator: 'in', value: ['draft', 'planned', 'active', 'on_hold'] }],
+          orderBy: [{ field: 'name', direction: 'asc' }], limit: 100,
+        }),
+        listQuery(deps, context.organizationId, 'workspace', {
+          filters: [{ field: 'status', operator: '==', value: 'active' }],
+          orderBy: [{ field: 'name', direction: 'asc' }], limit: 100,
+        }),
+      ])
+      const projects = projectPage.items.map((p) => ({ id: String(p.id), name: String(p.name) }))
+      const workspaces = workspacePage.items.map((w) => ({ id: String(w.id), name: String(w.name), ...(typeof w.projectId === 'string' ? { projectId: w.projectId } : {}) }))
       const capabilities = await evaluateCapabilities(deps, context.principal, context.organizationId, {
         create: 'task.create', update: 'task.update', transition: 'task.transition',
         assign: 'task.assign', reopen: 'task.reopen', archive: 'task.archive', saveView: 'saved_view.create',
       })
-      return { ...page, capabilities }
+      return { ...page, projects, workspaces, capabilities }
     },
     '/v1/tasks/create': (context, input) => service.create(metadata(context), {
       id: requireString(input, 'id'), projectId: requireString(input, 'projectId'),

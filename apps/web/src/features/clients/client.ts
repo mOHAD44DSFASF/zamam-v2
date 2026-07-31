@@ -7,6 +7,7 @@ export interface ClientSummary {
   industry: string | null
   status: 'lead' | 'active' | 'paused' | 'archived'
   activeProjectCount: number
+  version: number
 }
 
 export interface ClientContactView {
@@ -28,6 +29,7 @@ export interface ClientManagementSnapshot {
 export interface ClientManagementClient {
   load(organizationId: string): Promise<ClientManagementSnapshot>
   create(organizationId: string, input: { name: string; code: string; industry?: string }): Promise<void>
+  transition(organizationId: string, input: { clientId: string; expectedVersion: number; targetStatus: 'active' | 'paused' }): Promise<void>
   addContact(organizationId: string, input: { clientId: string; name: string; email: string; clientAdmin: boolean }): Promise<void>
   setEligibility(organizationId: string, input: { clientId: string; contactId: string; expectedVersion: number; eligible: boolean }): Promise<void>
 }
@@ -52,7 +54,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return envelope.data
 }
 
-interface RawClientRow { id?: unknown; name?: unknown; code?: unknown; industry?: unknown; status?: unknown }
+interface RawClientRow { id?: unknown; name?: unknown; code?: unknown; industry?: unknown; status?: unknown; version?: unknown }
 
 /**
  * `/v1/clients/query` returns `{ items: [...] }` — raw client docs, not the ClientManagementSnapshot
@@ -67,13 +69,15 @@ function toClientSnapshot(raw: { items?: readonly RawClientRow[]; capabilities?:
     industry: typeof row.industry === 'string' ? row.industry : null,
     status: (typeof row.status === 'string' ? row.status : 'active') as ClientSummary['status'],
     activeProjectCount: 0,
+    version: typeof row.version === 'number' ? row.version : 1,
   }))
   return { clients, contacts: [], capabilities: raw.capabilities ?? { create: false, manage: false, manageContacts: false, archive: false } }
 }
 
 export const clientManagementClient: ClientManagementClient = {
   load: async (organizationId) => toClientSnapshot(await post('/v1/clients/query', { organizationId })),
-  create: (organizationId, input) => post('/v1/clients/create', { organizationId, ...input }),
-  addContact: (organizationId, input) => post('/v1/clients/contacts/create', { organizationId, ...input }),
+  create: (organizationId, input) => post('/v1/clients/create', { organizationId, id: crypto.randomUUID(), ...input }),
+  transition: (organizationId, input) => post('/v1/clients/transition', { organizationId, ...input }),
+  addContact: (organizationId, input) => post('/v1/clients/contacts/create', { organizationId, id: crypto.randomUUID(), ...input }),
   setEligibility: (organizationId, input) => post('/v1/clients/contacts/eligibility', { organizationId, ...input }),
 }

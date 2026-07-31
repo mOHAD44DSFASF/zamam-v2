@@ -58,10 +58,23 @@ export function createWorkspaceHandlers(deps: Deps): HandlerRegistry {
         projectName: r.projectId ? projectNames.get(String(r.projectId)) ?? null : null,
         teamName: r.ownerTeamId ? teamNames.get(String(r.ownerTeamId)) ?? null : null,
       }))
+      // Pick-lists for the create form: active projects and teams.
+      const [projectPage, teamPage] = await Promise.all([
+        listQuery(deps, context.organizationId, 'project', {
+          filters: [{ field: 'status', operator: 'in', value: ['draft', 'planned', 'active', 'on_hold'] }],
+          orderBy: [{ field: 'name', direction: 'asc' }], limit: 100,
+        }),
+        listQuery(deps, context.organizationId, 'team', {
+          filters: [{ field: 'status', operator: '==', value: 'active' }],
+          orderBy: [{ field: 'name', direction: 'asc' }], limit: 100,
+        }),
+      ])
+      const projects = projectPage.items.map((p) => ({ id: String(p.id), name: String(p.name), ...(typeof p.departmentId === 'string' ? { departmentId: p.departmentId } : {}) }))
+      const teams = teamPage.items.map((t) => ({ id: String(t.id), name: String(t.name), departmentId: String(t.departmentId ?? '') }))
       const capabilities = await evaluateCapabilities(deps, context.principal, context.organizationId, {
         create: 'workspace.create', manageMembers: 'workspace.member.manage', archive: 'workspace.archive',
       })
-      return { items, capabilities }
+      return { items, projects, teams, capabilities }
     },
     '/v1/workspaces/create': (context, input) => service.create(metadata(context), {
       id: requireString(input, 'id'), name: requireString(input, 'name'),

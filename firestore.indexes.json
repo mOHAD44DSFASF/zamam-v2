@@ -9,7 +9,7 @@
     {"collectionGroup":"timesheet","queryScope":"COLLECTION","fields":[{"fieldPath":"status","order":"ASCENDING"},{"fieldPath":"periodStart","order":"DESCENDING"}]},
     {"collectionGroup":"attendance_record","queryScope":"COLLECTION","fields":[{"fieldPath":"userId","order":"ASCENDING"},{"fieldPath":"date","order":"DESCENDING"}]},
     {"collectionGroup":"leave_request","queryScope":"COLLECTION","fields":[{"fieldPath":"status","order":"ASCENDING"},{"fieldPath":"startsOn","order":"ASCENDING"}]},
-    {"collectionGroup":"capacity_plan","queryScope":"COLLECTION","fields":[{"fieldPath":"scopeType","order":"ASCENDING"},{"fieldPath":"scopeId","order":"ASCENDING"},{"fieldPath":"periodStart","order":"DESCENDING"}]},
+    {"collectionGroup":"capacity_plan","queryScope":"COLLECTION","fields":[{"fieldPath":"scopeType","order":"ASCENDING"},{"fieldPath":"scopeId","order":"ASCENDING"},{"fieldPath":"periodStart","order":"ASCENDING"},{"fieldPath":"allocatedMinutes","order":"DESCENDING"},{"fieldPath":"userId","order":"ASCENDING"}]},
     {"collectionGroup":"attachment","queryScope":"COLLECTION","fields":[{"fieldPath":"status","order":"ASCENDING"},{"fieldPath":"retentionState","order":"ASCENDING"},{"fieldPath":"visibility","order":"ASCENDING"},{"fieldPath":"updatedAt","order":"DESCENDING"}]},
     {"collectionGroup":"automation_run","queryScope":"COLLECTION","fields":[{"fieldPath":"automationId","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}]},
     {"collectionGroup":"audit_event","queryScope":"COLLECTION","fields":[{"fieldPath":"resourceType","order":"ASCENDING"},{"fieldPath":"occurredAt","order":"DESCENDING"}]},

@@ -46,6 +46,10 @@ export function createClientHandlers(deps: Deps): HandlerRegistry {
       ...(typeof input.industry === 'string' ? { industry: input.industry } : {}),
       ...(typeof input.accountManagerUserId === 'string' ? { accountManagerUserId: input.accountManagerUserId } : {}),
     }),
+    '/v1/clients/transition': (context, input) => service.transition(
+      metadata(context), requireString(input, 'clientId'), requireNumber(input, 'expectedVersion'),
+      requireString(input, 'targetStatus') as 'active' | 'paused',
+    ),
     '/v1/clients/contacts/create': (context, input) => service.addContact(metadata(context), {
       id: requireString(input, 'id'), clientId: requireString(input, 'clientId'),
       name: requireString(input, 'name'), email: requireString(input, 'email'),
