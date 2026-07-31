@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { ProtectedRoute } from './auth/ProtectedRoute'
 import { PublicOnlyRoute } from './auth/PublicOnlyRoute'
+import { AppShell } from './app/AppShell'
 
 const AdministrationUnavailable = lazy(() => import('./pages/AdministrationUnavailable').then((module) => ({ default: module.AdministrationUnavailable })))
 const OrganizationAdminPage = lazy(() => import('./features/organization/OrganizationAdminPage').then((module) => ({ default: module.OrganizationAdminPage })))
@@ -46,28 +47,32 @@ function App() {
             <Route path="/invitations/accept" element={<InvitationAcceptance />} />
           </Route>
           <Route element={<ProtectedRoute />}>
-            <Route path="/workspace" element={<Navigate to="/tasks" replace />} />
-            <Route path="/admin" element={<AdministrationUnavailable />} />
-            <Route path="/admin/organization" element={<OrganizationAdminPage />} />
-            <Route path="/people" element={<EmployeeDirectoryPage />} />
-            <Route path="/clients" element={<ClientManagementPage />} />
-            <Route path="/projects" element={<ProjectManagementPage />} />
-            <Route path="/workspaces" element={<WorkspaceManagementPage />} />
-            <Route path="/tasks" element={<TaskManagementPage />} />
-            <Route path="/workflows/:templateId/builder" element={<WorkflowBuilderPage />} />
-            <Route path="/approvals" element={<ReviewInboxPage />} />
-            <Route path="/templates" element={<TemplateManagementPage />} />
-            <Route path="/tasks/:taskId/collaboration" element={<CollaborationPage />} />
-            <Route path="/files" element={<FileLibraryPage />} />
-            <Route path="/notifications" element={<NotificationCenterPage />} />
-            <Route path="/workload" element={<WorkloadPage />} />
-            <Route path="/time" element={<TimeTrackingPage />} />
-            <Route path="/attendance" element={<AttendanceLeavePage />} />
-            <Route path="/reports" element={<ReportsPage />} />
-            <Route path="/ai" element={<AIAssistantPage />} />
+            {/* Internal shell: every internal/Owner page renders inside the persistent navigation. */}
+            <Route element={<AppShell />}>
+              <Route path="/workspace" element={<Navigate to="/tasks" replace />} />
+              <Route path="/admin" element={<AdministrationUnavailable />} />
+              <Route path="/admin/organization" element={<OrganizationAdminPage />} />
+              <Route path="/people" element={<EmployeeDirectoryPage />} />
+              <Route path="/clients" element={<ClientManagementPage />} />
+              <Route path="/projects" element={<ProjectManagementPage />} />
+              <Route path="/workspaces" element={<WorkspaceManagementPage />} />
+              <Route path="/tasks" element={<TaskManagementPage />} />
+              <Route path="/workflows/:templateId/builder" element={<WorkflowBuilderPage />} />
+              <Route path="/approvals" element={<ReviewInboxPage />} />
+              <Route path="/templates" element={<TemplateManagementPage />} />
+              <Route path="/tasks/:taskId/collaboration" element={<CollaborationPage />} />
+              <Route path="/files" element={<FileLibraryPage />} />
+              <Route path="/notifications" element={<NotificationCenterPage />} />
+              <Route path="/workload" element={<WorkloadPage />} />
+              <Route path="/time" element={<TimeTrackingPage />} />
+              <Route path="/attendance" element={<AttendanceLeavePage />} />
+              <Route path="/reports" element={<ReportsPage />} />
+              <Route path="/ai" element={<AIAssistantPage />} />
+              <Route path="/automations" element={<AutomationPage />} />
+            </Route>
+            {/* Client portal is a separate shell (no internal navigation). */}
             <Route path="/portal/:organizationSlug" element={<ClientPortalPage />} />
             <Route path="/portal/:organizationSlug/projects/:projectId" element={<ClientPortalPage />} />
-            <Route path="/automations" element={<AutomationPage />} />
           </Route>
           <Route path="/" element={<Navigate to="/workspace" replace />} />
           <Route path="*" element={<Navigate to="/workspace" replace />} />
