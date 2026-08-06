@@ -1,7 +1,8 @@
 import type { AuthorizationPrincipal, AuthorizationRequest, Permission } from '@zamam/authorization'
 import {
-  SCHEMA_VERSION, TERMINAL_TASK_STATUSES, assertTaskDueAt, assertTaskStatusTransition,
-  normalizeTaskDescription, normalizeTaskTitle, type TaskStatus,
+  SCHEMA_VERSION, TERMINAL_TASK_STATUSES, assertDriveLink, assertSendBackTarget, assertStepStatusTransition,
+  assertStepsInput, assertTaskDueAt, assertTaskStatusTransition, normalizeSendBackReason, normalizeStepName,
+  normalizeTaskDescription, normalizeTaskTitle, type TaskStatus, type TaskStepInput, type TaskStepStatus,
 } from '@zamam/domain'
 import { SERVER_TIMESTAMP, tenantDocumentPath, type AtomicStore, type AtomicTransaction } from '@zamam/firestore'
 import { z } from 'zod'
@@ -9,11 +10,19 @@ import { AuditCommandService } from '../audit/service.js'
 
 const id = z.string().regex(/^[A-Za-z0-9_-]{2,128}$/)
 const version = z.number().int().positive()
+const stepInputSchema = z.object({
+  name: z.string(),
+  assigneeType: z.enum(['person', 'department']),
+  assigneeUserId: id.optional(),
+  assigneeDepartmentId: id.optional(),
+  driveLink: z.string().optional(),
+}).strict()
 const createTaskSchema = z.object({
-  id, projectId: id, workspaceId: id.optional(), parentTaskId: id.optional(),
+  id, projectId: id.optional(), workspaceId: id.optional(), parentTaskId: id.optional(), departmentId: id.optional(),
   title: z.string(), description: z.string().default(''),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
-  dueAt: z.string().optional(), clientVisible: z.boolean().default(false),
+  dueAt: z.string().optional(), clientVisible: z.boolean().default(false), driveLink: z.string().optional(),
+  steps: z.array(stepInputSchema).min(1),
 }).strict()
 const updateTaskSchema = z.object({
   taskId: id, expectedVersion: version,
@@ -25,6 +34,9 @@ const assignmentSchema = z.object({
   id, taskId: id, userId: id.optional(), teamId: id.optional(),
   assignmentRole: z.enum(['responsible', 'contributor']),
 }).strict().refine((value) => Number(Boolean(value.userId)) + Number(Boolean(value.teamId)) === 1, 'ASSIGNMENT_PRINCIPAL_REQUIRED')
+const sendBackSchema = z.object({
+  taskId: id, expectedVersion: version, targetStepOrder: z.number().int().min(0), reason: z.string(),
+}).strict()
 
 export interface TaskAuthorizationGate {
   require(principal: AuthorizationPrincipal, request: AuthorizationRequest): Promise<unknown>
@@ -38,6 +50,12 @@ export interface TaskCommandMetadata {
 }
 export interface TaskReferencePort {
   activeWorkflowInstanceCount(organizationId: string, taskId: string): Promise<number>
+}
+/** Resolves a department's active members — needed synchronously at task-creation time (not deferrable to
+ * async notification projection) so every department-assigned step's members get a `task_assignment` row
+ * the moment the task exists, satisfying the "past/current/future step assignee can see the task" rule. */
+export interface TaskDepartmentMembersPort {
+  activeMembers(organizationId: string, departmentId: string): Promise<readonly string[]>
 }
 
 const base = (organizationId: string) => ({
@@ -53,6 +71,20 @@ const owned = async (transaction: AtomicTransaction, path: string, organizationI
 const assertExpected = (record: Readonly<Record<string, unknown>>, expectedVersion: number) => {
   if (record.version !== expectedVersion) throw new Error('VERSION_CONFLICT')
 }
+const stepPath = (organizationId: string, taskId: string, order: number) =>
+  tenantDocumentPath(organizationId, 'task_step', `${taskId}-step-${order}`)
+const assignmentPath = (organizationId: string, taskId: string, userId: string) =>
+  tenantDocumentPath(organizationId, 'task_assignment', `${taskId}-assign-${userId}`)
+const stepEventId = (taskId: string, order: number, sequence: number) => `${taskId}-step-${order}-event-${sequence}`
+
+/** Is `principal` allowed to act as the holder of `step` right now? Person steps are an exact userId
+ * match; department steps require the caller's own primary department to match the step's — no separate
+ * "claim" workflow, any active member of the department may act (see docs in the product request). */
+const stepEligibility = (
+  principal: AuthorizationPrincipal, step: Readonly<Record<string, unknown>>, callerEmployment: Readonly<Record<string, unknown>> | null,
+) => step.assigneeType === 'person'
+  ? step.assigneeUserId === principal.userId
+  : callerEmployment?.primaryDepartmentId === step.assigneeDepartmentId
 
 export class TaskService {
   private readonly audit: AuditCommandService
@@ -60,15 +92,20 @@ export class TaskService {
     private readonly store: AtomicStore,
     private readonly authorization: TaskAuthorizationGate,
     private readonly references: TaskReferencePort,
+    private readonly departments: TaskDepartmentMembersPort,
     audit?: AuditCommandService,
   ) { this.audit = audit ?? new AuditCommandService(store) }
 
-  private async authorized(metadata: TaskCommandMetadata, permission: Permission, taskId?: string) {
+  private async authorized(metadata: TaskCommandMetadata, permission: Permission, taskId?: string, extra?: {
+    departmentId?: string; assigneeUserIds?: readonly string[]
+  }) {
     await this.authorization.require(metadata.principal, {
       permission, organizationId: metadata.organizationId,
       ...(taskId ? { resource: {
         type: 'task', id: taskId, organizationId: metadata.organizationId,
         ownerUserId: metadata.principal.userId, visibility: 'internal',
+        ...(extra?.departmentId ? { departmentId: extra.departmentId } : {}),
+        ...(extra?.assigneeUserIds ? { assigneeUserIds: extra.assigneeUserIds } : {}),
       } } : {}),
     })
     return {
@@ -79,30 +116,102 @@ export class TaskService {
 
   async create(metadata: TaskCommandMetadata, raw: z.input<typeof createTaskSchema>) {
     const parsed = createTaskSchema.parse(raw)
+    const steps: TaskStepInput[] = parsed.steps.map((step) => ({
+      name: step.name, assigneeType: step.assigneeType,
+      ...(step.assigneeUserId ? { assigneeUserId: step.assigneeUserId } : {}),
+      ...(step.assigneeDepartmentId ? { assigneeDepartmentId: step.assigneeDepartmentId } : {}),
+      ...(step.driveLink ? { driveLink: step.driveLink } : {}),
+    }))
     const input = {
       ...parsed, title: normalizeTaskTitle(parsed.title),
-      description: normalizeTaskDescription(parsed.description),
+      description: normalizeTaskDescription(parsed.description), steps,
     }
     assertTaskDueAt(input.dueAt)
-    const context = await this.authorized(metadata, 'task.create', input.id)
+    assertDriveLink(input.driveLink)
+    assertStepsInput(input.steps)
+    // A Department Lead's task.create is scoped to their own department (see engine.ts scopeMatches() and
+    // the Manager/DepartmentLead role-assignment scopes set up in EmployeeService.invite()) — a Manager or
+    // Owner's organization-scoped assignment matches regardless of departmentId.
+    const context = await this.authorized(metadata, 'task.create', input.id, {
+      ...(input.departmentId ? { departmentId: input.departmentId } : {}),
+    })
+    // Resolve department-assigned steps' active members BEFORE the transaction — Firestore transactions in
+    // this codebase only do direct-path get()s, never queries (see ProjectLifecyclePort/WorkloadSourcePort
+    // for the same pre-transaction-resolution pattern).
+    const departmentIds = [...new Set(
+      input.steps.filter((step): step is TaskStepInput & { assigneeDepartmentId: string } => step.assigneeType === 'department' && Boolean(step.assigneeDepartmentId))
+        .map((step) => step.assigneeDepartmentId),
+    )]
+    const departmentMembers = new Map<string, readonly string[]>()
+    for (const departmentId of departmentIds) {
+      departmentMembers.set(departmentId, await this.departments.activeMembers(metadata.organizationId, departmentId))
+    }
     return this.audit.execute(context, async (transaction) => {
-      const project = await owned(transaction, tenantDocumentPath(metadata.organizationId, 'project', input.projectId), metadata.organizationId)
-      if (!['planned', 'active', 'on_hold'].includes(String(project.status))) throw new Error('TASK_PROJECT_NOT_ACTIVE')
+      // Read phase — all get()s before any write (Firestore transaction rule).
+      if (input.projectId) {
+        const project = await owned(transaction, tenantDocumentPath(metadata.organizationId, 'project', input.projectId), metadata.organizationId)
+        if (!['planned', 'active', 'on_hold'].includes(String(project.status))) throw new Error('TASK_PROJECT_NOT_ACTIVE')
+      }
       if (input.workspaceId) {
+        if (!input.projectId) throw new Error('TASK_WORKSPACE_REQUIRES_PROJECT')
         const workspace = await owned(transaction, tenantDocumentPath(metadata.organizationId, 'workspace', input.workspaceId), metadata.organizationId)
         if (workspace.status !== 'active' || (workspace.projectId && workspace.projectId !== input.projectId)) throw new Error('TASK_WORKSPACE_SCOPE_CONFLICT')
       }
       if (input.parentTaskId) {
         const parent = await owned(transaction, tenantDocumentPath(metadata.organizationId, 'task', input.parentTaskId), metadata.organizationId)
-        if (parent.projectId !== input.projectId || TERMINAL_TASK_STATUSES.has(parent.status as TaskStatus)) throw new Error('TASK_PARENT_SCOPE_CONFLICT')
+        if ((input.projectId && parent.projectId !== input.projectId) || TERMINAL_TASK_STATUSES.has(parent.status as TaskStatus)) throw new Error('TASK_PARENT_SCOPE_CONFLICT')
+      }
+      if (input.departmentId) {
+        const department = await owned(transaction, tenantDocumentPath(metadata.organizationId, 'department', input.departmentId), metadata.organizationId)
+        if (department.status !== 'active') throw new Error('TASK_DEPARTMENT_NOT_ACTIVE')
+      }
+      const employmentCache = new Map<string, Readonly<Record<string, unknown>>>()
+      for (const step of input.steps) {
+        if (step.assigneeType !== 'person' || employmentCache.has(step.assigneeUserId!)) continue
+        const employment = await owned(transaction, tenantDocumentPath(metadata.organizationId, 'employment_profile', step.assigneeUserId!), metadata.organizationId)
+        if (employment.status !== 'active') throw new Error('STEP_ASSIGNEE_NOT_ACTIVE')
+        employmentCache.set(step.assigneeUserId!, employment)
       }
       const path = tenantDocumentPath(metadata.organizationId, 'task', input.id)
       if (await transaction.get(path)) throw new Error('ENTITY_ALREADY_EXISTS')
-      transaction.create(path, { ...base(metadata.organizationId), ...input, createdBy: metadata.principal.userId, status: 'draft' })
+      // Write phase.
+      const { steps, ...taskFields } = input
+      transaction.create(path, {
+        ...base(metadata.organizationId), ...taskFields, createdBy: metadata.principal.userId,
+        status: 'in_progress', currentStepOrder: 0, stepCount: steps.length,
+      })
+      const assignedUserIds = new Set<string>()
+      let firstStepAssigneeUserIds: readonly string[] = []
+      steps.forEach((step, order) => {
+        const isCurrent = order === 0
+        transaction.create(stepPath(metadata.organizationId, input.id, order), {
+          ...base(metadata.organizationId), taskId: input.id, order, name: normalizeStepName(step.name),
+          assigneeType: step.assigneeType,
+          ...(step.assigneeUserId ? { assigneeUserId: step.assigneeUserId } : {}),
+          ...(step.assigneeDepartmentId ? { assigneeDepartmentId: step.assigneeDepartmentId } : {}),
+          ...(step.driveLink ? { driveLink: step.driveLink } : {}),
+          status: (isCurrent ? 'in_progress' : 'pending') satisfies TaskStepStatus,
+        })
+        const assigneeUserIds = step.assigneeType === 'person'
+          ? [step.assigneeUserId!]
+          : departmentMembers.get(step.assigneeDepartmentId!) ?? []
+        if (isCurrent) firstStepAssigneeUserIds = assigneeUserIds
+        for (const userId of assigneeUserIds) {
+          if (assignedUserIds.has(userId)) continue
+          assignedUserIds.add(userId)
+          transaction.create(assignmentPath(metadata.organizationId, input.id, userId), {
+            ...base(metadata.organizationId), taskId: input.id, userId, assignmentRole: 'responsible' as const,
+            assignedBy: metadata.principal.userId, status: 'accepted',
+          })
+        }
+      })
       return {
-        result: { taskId: input.id, version: 1, status: 'draft' as const },
+        result: { taskId: input.id, version: 1, status: 'in_progress' as const, stepCount: steps.length },
         resourceType: 'task', resourceId: input.id,
-        outbox: { type: 'task.created', version: 1, payload: { taskId: input.id, projectId: input.projectId } },
+        outbox: {
+          type: 'task.created', version: 1,
+          payload: { taskId: input.id, ...(input.projectId ? { projectId: input.projectId } : {}), assigneeUserIds: firstStepAssigneeUserIds },
+        },
       }
     })
   }
@@ -152,6 +261,120 @@ export class TaskService {
         result: { taskId, version: nextVersion, status: targetStatus },
         resourceType: 'task', resourceId: taskId,
         outbox: { type: 'task.transitioned', version: 1, payload: { taskId, from: task.status, to: targetStatus } },
+      }
+    })
+  }
+
+  /** Pre-transaction read used by both completeCurrentStep and sendBackStep to (a) build the resource
+   * context an authorization check needs before it can decide, and (b) hand the audited transaction a
+   * consistent view it re-verifies from scratch — same split WorkflowExecutionService.transition() uses. */
+  private async readCurrentStepSnapshot(organizationId: string, taskId: string, principalUserId: string) {
+    return this.store.runTransaction(async (transaction) => {
+      const task = await owned(transaction, tenantDocumentPath(organizationId, 'task', taskId), organizationId)
+      const step = await owned(transaction, stepPath(organizationId, taskId, Number(task.currentStepOrder)), organizationId)
+      const callerEmployment = step.assigneeType === 'department'
+        ? await transaction.get(tenantDocumentPath(organizationId, 'employment_profile', principalUserId))
+        : null
+      return { task, step, callerEmployment }
+    })
+  }
+
+  async completeCurrentStep(metadata: TaskCommandMetadata, taskId: string, expectedVersion: number) {
+    id.parse(taskId); version.parse(expectedVersion)
+    const snapshot = await this.readCurrentStepSnapshot(metadata.organizationId, taskId, metadata.principal.userId)
+    const eligible = stepEligibility(metadata.principal, snapshot.step, snapshot.callerEmployment)
+    const context = await this.authorized(metadata, 'task.transition', taskId, {
+      assigneeUserIds: eligible ? [metadata.principal.userId] : [],
+    })
+    return this.audit.execute(context, async (transaction) => {
+      const taskPath = tenantDocumentPath(metadata.organizationId, 'task', taskId)
+      const task = await owned(transaction, taskPath, metadata.organizationId)
+      assertExpected(task, expectedVersion)
+      const currentOrder = Number(task.currentStepOrder)
+      const currentStepPath = stepPath(metadata.organizationId, taskId, currentOrder)
+      const currentStep = await owned(transaction, currentStepPath, metadata.organizationId)
+      if (!stepEligibility(metadata.principal, currentStep, snapshot.callerEmployment)) throw new Error('STEP_HOLDER_REQUIRED')
+      assertStepStatusTransition(currentStep.status as TaskStepStatus, 'done')
+      const stepCount = Number(task.stepCount)
+      const isLastStep = currentOrder === stepCount - 1
+      const nextStep = isLastStep ? null : await owned(transaction, stepPath(metadata.organizationId, taskId, currentOrder + 1), metadata.organizationId)
+      const nextVersion = Number(task.version) + 1
+      // Write phase.
+      transaction.update(currentStepPath, {
+        status: 'done' as const, version: Number(currentStep.version) + 1, updatedAt: SERVER_TIMESTAMP,
+      })
+      transaction.create(tenantDocumentPath(metadata.organizationId, 'task_step_event', stepEventId(taskId, currentOrder, Number(task.version))), {
+        ...base(metadata.organizationId), taskId, stepOrder: currentOrder, fromStatus: currentStep.status, toStatus: 'done',
+        actorUserId: metadata.principal.userId, occurredAt: SERVER_TIMESTAMP,
+      })
+      if (isLastStep) {
+        transaction.update(taskPath, { status: 'completed', completedAt: SERVER_TIMESTAMP, version: nextVersion, updatedAt: SERVER_TIMESTAMP })
+      } else {
+        const nextPath = stepPath(metadata.organizationId, taskId, currentOrder + 1)
+        transaction.update(nextPath, { status: 'in_progress' as const, version: Number(nextStep!.version) + 1, updatedAt: SERVER_TIMESTAMP })
+        transaction.update(taskPath, { currentStepOrder: currentOrder + 1, version: nextVersion, updatedAt: SERVER_TIMESTAMP })
+      }
+      const nextAssignee = nextStep
+        ? (nextStep.assigneeType === 'person'
+          ? { assigneeUserId: String(nextStep.assigneeUserId) }
+          : { assigneeDepartmentId: String(nextStep.assigneeDepartmentId) })
+        : {}
+      return {
+        result: { taskId, version: nextVersion, currentStepOrder: isLastStep ? currentOrder : currentOrder + 1, taskStatus: isLastStep ? 'completed' as const : 'in_progress' as const },
+        resourceType: 'task', resourceId: taskId,
+        outbox: isLastStep
+          ? { type: 'task.transitioned', version: 1, payload: { taskId, from: 'in_progress', to: 'completed' } }
+          : { type: 'task.step_arrived', version: 1, payload: { taskId, stepOrder: currentOrder + 1, ...nextAssignee } },
+      }
+    })
+  }
+
+  async sendBackStep(metadata: TaskCommandMetadata, raw: z.input<typeof sendBackSchema>) {
+    const input = sendBackSchema.parse(raw)
+    const reason = normalizeSendBackReason(input.reason)
+    const snapshot = await this.readCurrentStepSnapshot(metadata.organizationId, input.taskId, metadata.principal.userId)
+    const eligible = stepEligibility(metadata.principal, snapshot.step, snapshot.callerEmployment)
+    const context = await this.authorized(metadata, 'task.transition', input.taskId, {
+      assigneeUserIds: eligible ? [metadata.principal.userId] : [],
+    })
+    return this.audit.execute(context, async (transaction) => {
+      const taskPath = tenantDocumentPath(metadata.organizationId, 'task', input.taskId)
+      const task = await owned(transaction, taskPath, metadata.organizationId)
+      assertExpected(task, input.expectedVersion)
+      const currentOrder = Number(task.currentStepOrder)
+      assertSendBackTarget(currentOrder, input.targetStepOrder)
+      const currentStepPath = stepPath(metadata.organizationId, input.taskId, currentOrder)
+      const currentStep = await owned(transaction, currentStepPath, metadata.organizationId)
+      if (!stepEligibility(metadata.principal, currentStep, snapshot.callerEmployment)) throw new Error('STEP_HOLDER_REQUIRED')
+      assertStepStatusTransition(currentStep.status as TaskStepStatus, 'sent_back')
+      const targetStepPath = stepPath(metadata.organizationId, input.taskId, input.targetStepOrder)
+      const targetStep = await owned(transaction, targetStepPath, metadata.organizationId)
+      // Read phase for every "in-between" step (target < order < current) — all get()s before any write.
+      const betweenPaths = Array.from(
+        { length: Math.max(0, currentOrder - input.targetStepOrder - 1) },
+        (_, index) => stepPath(metadata.organizationId, input.taskId, input.targetStepOrder + 1 + index),
+      )
+      const betweenSteps = await Promise.all(betweenPaths.map((path) => owned(transaction, path, metadata.organizationId)))
+      const nextVersion = Number(task.version) + 1
+      // Write phase.
+      transaction.update(currentStepPath, { status: 'sent_back' as const, version: Number(currentStep.version) + 1, updatedAt: SERVER_TIMESTAMP })
+      transaction.update(targetStepPath, { status: 'in_progress' as const, version: Number(targetStep.version) + 1, updatedAt: SERVER_TIMESTAMP })
+      betweenPaths.forEach((path, index) => {
+        transaction.update(path, { status: 'pending' as const, version: Number(betweenSteps[index]!.version) + 1, updatedAt: SERVER_TIMESTAMP })
+      })
+      transaction.update(taskPath, { currentStepOrder: input.targetStepOrder, version: nextVersion, updatedAt: SERVER_TIMESTAMP })
+      transaction.create(tenantDocumentPath(metadata.organizationId, 'task_step_event', stepEventId(input.taskId, currentOrder, Number(task.version))), {
+        ...base(metadata.organizationId), taskId: input.taskId, stepOrder: currentOrder, fromStatus: currentStep.status,
+        toStatus: 'sent_back', actorUserId: metadata.principal.userId, reason, targetStepOrder: input.targetStepOrder,
+        occurredAt: SERVER_TIMESTAMP,
+      })
+      const targetAssignee = targetStep.assigneeType === 'person'
+        ? { assigneeUserId: String(targetStep.assigneeUserId) }
+        : { assigneeDepartmentId: String(targetStep.assigneeDepartmentId) }
+      return {
+        result: { taskId: input.taskId, version: nextVersion, currentStepOrder: input.targetStepOrder },
+        resourceType: 'task', resourceId: input.taskId,
+        outbox: { type: 'task.step_sent_back', version: 1, payload: { taskId: input.taskId, stepOrder: input.targetStepOrder, reason, ...targetAssignee } },
       }
     })
   }

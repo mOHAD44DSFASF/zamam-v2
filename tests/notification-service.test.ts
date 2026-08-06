@@ -86,6 +86,26 @@ describe('notification projection and preferences', () => {
     expect(serialized).not.toContain('DO_NOT_LEAK')
   })
 
+  it('projects step-arrived and step-sent-back task events (the step pipeline notification hooks)', async () => {
+    const store = new MemoryStore()
+    const service = new NotificationProjectionService(store, {
+      resolve: async () => [{ userId: 'user-1', locale: 'ar', timezone: 'Africa/Cairo', visibility: 'internal', active: true, canAccess: true }],
+    }, { get: async () => null }, { now: () => '2026-07-30T19:00:00.000Z' })
+    const arrived = event('task.step_arrived')
+    expect(await service.project(arrived)).toMatchObject({ created: 1 })
+    expect([...store.records.entries()].find(([path]) => path.includes('/notification/'))?.[1]).toMatchObject({
+      titleKey: 'notification.task.step_arrived', resourceType: 'task', resourceId: 'task-1',
+    })
+    const store2 = new MemoryStore()
+    const service2 = new NotificationProjectionService(store2, {
+      resolve: async () => [{ userId: 'user-1', locale: 'ar', timezone: 'Africa/Cairo', visibility: 'internal', active: true, canAccess: true }],
+    }, { get: async () => null }, { now: () => '2026-07-30T19:00:00.000Z' })
+    expect(await service2.project(event('task.step_sent_back'))).toMatchObject({ created: 1 })
+    expect([...store2.records.entries()].find(([path]) => path.includes('/notification/'))?.[1]).toMatchObject({
+      titleKey: 'notification.task.step_sent_back', resourceType: 'task',
+    })
+  })
+
   it('skips inactive or unauthorized recipients before writing any record', async () => {
     const store = new MemoryStore()
     const service = new NotificationProjectionService(store, {

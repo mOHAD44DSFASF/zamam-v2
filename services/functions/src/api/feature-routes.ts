@@ -13,7 +13,7 @@ export const FEATURE_API_PATHS=[
   '/v1/clients/query','/v1/clients/create','/v1/clients/transition','/v1/clients/contacts/create','/v1/clients/contacts/eligibility',
   '/v1/projects/query','/v1/projects/create','/v1/projects/transition','/v1/projects/client-visibility',
   '/v1/workspaces/query','/v1/workspaces/create',
-  '/v1/tasks/query','/v1/tasks/create','/v1/tasks/update','/v1/task-views/create','/v1/workflows/instances/transition',
+  '/v1/tasks/query','/v1/tasks/create','/v1/tasks/update','/v1/tasks/complete-step','/v1/tasks/send-back-step','/v1/task-views/create','/v1/workflows/instances/transition',
   '/v1/workflows/builder/query','/v1/workflows/drafts/update','/v1/workflows/simulate','/v1/workflows/publish',
   '/v1/reviews/inbox','/v1/reviews/decide',
   '/v1/templates/query','/v1/templates/create','/v1/templates/publish','/v1/recurrences/status',

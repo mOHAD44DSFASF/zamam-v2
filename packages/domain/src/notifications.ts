@@ -69,6 +69,8 @@ const eventPolicies: Readonly<Record<string, NotificationEventPolicy>> = {
   'task.created': { titleKey: 'notification.task.created', previewKey: 'notification.open_securely', critical: false, externalAllowed: true, resourceType: 'task' },
   'task.assigned': { titleKey: 'notification.task.assigned', previewKey: 'notification.open_securely', critical: false, externalAllowed: true, resourceType: 'task' },
   'task.transitioned': { titleKey: 'notification.task.transitioned', previewKey: 'notification.open_securely', critical: false, externalAllowed: true, resourceType: 'task' },
+  'task.step_arrived': { titleKey: 'notification.task.step_arrived', previewKey: 'notification.open_securely', critical: false, externalAllowed: true, resourceType: 'task' },
+  'task.step_sent_back': { titleKey: 'notification.task.step_sent_back', previewKey: 'notification.open_securely', critical: false, externalAllowed: true, resourceType: 'task' },
   'task.overdue': { titleKey: 'notification.task.overdue', previewKey: 'notification.open_securely', critical: false, externalAllowed: true, resourceType: 'task' },
   'review.requested': { titleKey: 'notification.review.requested', previewKey: 'notification.review_securely', critical: false, externalAllowed: true, resourceType: 'review_request' },
   'approval.requested': { titleKey: 'notification.approval.requested', previewKey: 'notification.approval_securely', critical: true, externalAllowed: true, resourceType: 'approval' },

@@ -148,7 +148,7 @@ export interface RecurrenceRun extends TenantEntity { scheduleId: string; templa
 export const ENTITY_DESCRIPTORS = [
   'organization', 'organization_settings', 'department', 'team', 'user_profile', 'organization_membership', 'invitation', 'employment_profile',
   'role', 'permission_definition', 'role_assignment', 'team_membership', 'client', 'client_contact', 'client_request', 'client_delivery', 'project',
-  'project_member', 'project_financials', 'workspace', 'workspace_member', 'task', 'subtask', 'checklist', 'checklist_item', 'task_assignment', 'task_watcher',
+  'project_member', 'project_financials', 'workspace', 'workspace_member', 'task', 'task_step', 'task_step_event', 'subtask', 'checklist', 'checklist_item', 'task_assignment', 'task_watcher',
   'tag', 'workflow_template', 'workflow_version', 'workflow_stage', 'workflow_transition', 'task_workflow_instance',
   'task_stage_execution', 'review_request', 'approval', 'change_request', 'comment', 'mention', 'reaction', 'attachment',
   'file_version', 'notification', 'notification_preference', 'notification_delivery', 'time_entry', 'timesheet', 'time_correction', 'work_schedule', 'attendance_record', 'attendance_correction',
