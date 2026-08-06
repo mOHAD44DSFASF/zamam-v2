@@ -28,6 +28,7 @@
     "check:launch-readiness": "node tools/assert-launch-ready.mjs",
     "package:functions": "npm run build:deploy --workspace @zamam/functions && node tools/package-functions.mjs",
     "bootstrap:owner": "node tools/bootstrap-owner.mjs",
+    "emulators:dev": "node tools/ensure-dir.mjs .local-run/emulator-data && firebase emulators:start --project zamam-emulator --only auth,firestore,functions --import=./.local-run/emulator-data --export-on-exit=./.local-run/emulator-data",
     "preview": "npm run preview --workspace @zamam/web"
   },
   "devDependencies": {

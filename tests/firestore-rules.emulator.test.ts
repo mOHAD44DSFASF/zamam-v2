@@ -5,14 +5,30 @@ import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest'
 
 let environment: RulesTestEnvironment
 
+/**
+ * This suite calls environment.clearFirestore() before every test — safe only against an emulator that
+ * `firebase emulators:exec` spun up just for this run and will tear down afterward, catastrophic against
+ * a developer's long-running manual-testing emulator (it wiped org-demo's bootstrap data once already,
+ * see docs/v2/LOCAL_DEVELOPMENT.md "Emulator data loss incident"). `emulators:exec` sets
+ * FIREBASE_EMULATOR_HUB in the child process env; a bare `npm run test:rules` (or this file run directly)
+ * does not. Refuse to run rather than risk clearing someone else's data — use `npm run test:emulator`.
+ */
 beforeAll(async () => {
+  if (!process.env.FIREBASE_EMULATOR_HUB) {
+    throw new Error(
+      'REFUSING TO RUN: this suite calls clearFirestore() every test, which would wipe any Firestore ' +
+      'emulator already running on this machine (e.g. a developer\'s manual-testing environment) — it must ' +
+      'only run inside an emulator `firebase emulators:exec` started just for this test run. ' +
+      'Run `npm run test:emulator` instead of `npm run test:rules`/`vitest run --config vitest.emulator.config.ts` directly.',
+    )
+  }
   environment = await initializeTestEnvironment({
     projectId: 'zamam-emulator',
     firestore: { rules: readFileSync('firestore.rules', 'utf8') },
   })
 })
 
-afterAll(async () => environment.cleanup())
+afterAll(async () => environment?.cleanup())
 beforeEach(async () => {
   await environment.clearFirestore()
   await environment.withSecurityRulesDisabled(async (context) => {

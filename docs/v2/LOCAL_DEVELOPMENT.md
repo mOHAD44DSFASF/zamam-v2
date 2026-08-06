@@ -1,5 +1,50 @@
 # Local Development
 
+## Starting the emulators (with persistent data)
+
+**Use `npm run emulators:dev` to start the local Auth/Firestore/Functions emulators for manual testing —
+not a bare `firebase emulators:start`.** The Firestore and Auth emulators only ever hold data in memory;
+a plain `emulators:start` loses everything the moment the process exits, which meant every restart (or
+crash, or an unrelated `test:rules` run — see "Emulator data loss incident" below) silently wiped
+`org-demo` and forced a re-bootstrap.
+
+```
+npm run emulators:dev
+```
+
+This is `firebase emulators:start --project zamam-emulator --only auth,firestore,functions
+--import=./.local-run/emulator-data --export-on-exit=./.local-run/emulator-data` (with the target
+directory created first if it doesn't exist yet — `--import` errors on a missing path). `.local-run/` is
+already gitignored, so this data never gets committed.
+
+**For this to actually persist, shut the emulator down normally — Ctrl+C in the terminal it's running in
+(or, if it was started detached, a normal SIGTERM/`Stop-Process` without `-Force` if possible).**
+`--export-on-exit` only runs on a clean shutdown; a forceful kill (`-Force`/`SIGKILL`, killing the wrong
+process tree, or the machine losing power) skips the export and you lose whatever changed since the last
+clean exit — same failure mode as before, just narrower. If you need to kill it forcefully for some
+reason, run `firebase emulators:export ./.local-run/emulator-data --project zamam-emulator` first while
+it's still up.
+
+Data now survives normal restarts and machine reboots. You only need `npm run bootstrap:owner` (see
+below) once per fresh `.local-run/emulator-data` directory — after that, `owner@zamam.local` keeps
+working across sessions as long as you always start with `emulators:dev` and stop it cleanly.
+
+### Emulator data loss incident (why the guard below exists)
+
+Earlier, `owner@zamam.local` intermittently stopped being able to log in
+(`"الحساب غير نشط أو لا يملك عضوية مؤسسة فعالة"`) with no code change to explain it. The cause was never a
+new authorization bug — the `sessionViews` projection and Firestore rules were untouched and correct. The
+actual cause was `tests/firestore-rules.emulator.test.ts`, whose `beforeEach` calls
+`environment.clearFirestore()` on every single test. When that suite is run correctly — wrapped in
+`firebase emulators:exec`, which starts an emulator solely for that test run and tears it down after —
+this is fine, since it's a dedicated throwaway instance. But `@firebase/rules-unit-testing`'s
+`initializeTestEnvironment()` doesn't care which emulator it's talking to; it just connects to whatever is
+listening on the Firestore emulator port from `firebase.json` (8080). Running `npm run test:rules` (or
+`vitest run --config vitest.emulator.config.ts`) **directly**, while a developer's own long-running
+`emulators:dev` instance happened to already be up on that same port, connected the test suite straight to
+it — and `clearFirestore()` wiped `org-demo` along with everything else. See "Never run the rules tests
+directly" below for the structural fix.
+
 ## Bootstrapping the first Owner and organization
 
 There is no self-service "create organization" flow in the product (by design — see
@@ -60,6 +105,31 @@ scripting without shell history exposing a password.)
 On success it prints a JSON summary including `userId`, `roleAssignmentId`, and which actions this
 specific run actually performed (`actionsPerformedThisRun: []` on a second run means it was already
 fully bootstrapped — nothing was duplicated).
+
+## Never run the rules tests directly against a running emulator
+
+`tests/firestore-rules.emulator.test.ts` calls `environment.clearFirestore()` before every test — safe
+only when it's run inside an emulator that `firebase emulators:exec` started just for that test run.
+
+```
+npm run test:emulator   # correct — emulators:exec spins up its own throwaway instance and tears it down after
+npm run test:rules      # WRONG if a dev emulator (npm run emulators:dev) is already running — connects
+                         # straight to it and clearFirestore() will wipe it
+```
+
+This isn't just a documentation warning: `tests/firestore-rules.emulator.test.ts`'s `beforeAll` refuses to
+run unless `process.env.FIREBASE_EMULATOR_HUB` is set — an env var `firebase emulators:exec` (and only
+`emulators:exec`) injects into the wrapped process. Running the suite any other way now fails fast with an
+explicit "REFUSING TO RUN" error instead of silently clearing whatever Firestore emulator happens to be on
+the default port. `firebase emulators:exec` itself is also already fail-closed here for a different reason:
+if the ports it needs (8080/9099/5001) are already bound by a running `emulators:dev`, it refuses to start
+at all rather than reusing that instance — so `npm run test:emulator` simply won't run while you have a
+dev emulator up; stop `emulators:dev` first (data is safe either way, since it exports on clean exit) or
+run the emulator tests from a machine/terminal where you don't have one running.
+
+`tests/bootstrap-owner.emulator.test.ts` is not gated the same way — it only creates records (no
+`clearFirestore()`), so running it against a live dev emulator is harmless, just possibly not idempotent
+if that emulator already has leftover data from a prior test run.
 
 ## CORS and the web app talking to the Functions emulator
 
