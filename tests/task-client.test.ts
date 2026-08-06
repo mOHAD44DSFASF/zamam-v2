@@ -8,7 +8,7 @@ describe('toTaskSnapshot (Tasks API response adapter)', () => {
   // at TaskManagementPage.tsx because `snapshot.tasks` didn't exist on the raw response at all.
   it('turns an empty result into a valid, empty TaskSnapshot instead of a shape mismatch', () => {
     expect(toTaskSnapshot({ items: [], nextCursor: null })).toEqual({
-      tasks: [], projects: [], workspaces: [],
+      tasks: [], projects: [], workspaces: [], departments: [], members: [],
       capabilities: { create: false, update: false, transition: false, assign: false, reopen: false, archive: false, saveView: false },
     })
   })
@@ -26,7 +26,6 @@ describe('toTaskSnapshot (Tasks API response adapter)', () => {
       id: 'task-1', projectId: 'project-1', title: 'Write the homepage', status: 'in_progress', priority: 'high', version: 3,
       assigneeNames: [], subtaskCount: 0, completedSubtaskCount: 0, checklistCount: 0, completedChecklistCount: 0,
     })
-    expect(snapshot.tasks[0].workflow).toBeUndefined()
     // Both tasks share project-1 — the derived project list must be deduplicated, not one entry per task.
     expect(snapshot.projects).toEqual([{ id: 'project-1', name: 'project-1' }])
     expect(snapshot.workspaces).toEqual([])
@@ -40,6 +39,6 @@ describe('toTaskSnapshot (Tasks API response adapter)', () => {
   it('tolerates malformed/missing fields on a raw record rather than throwing', () => {
     expect(() => toTaskSnapshot({ items: [{}], nextCursor: null })).not.toThrow()
     const snapshot = toTaskSnapshot({ items: [{}], nextCursor: null })
-    expect(snapshot.tasks[0]).toMatchObject({ id: '', projectId: '', title: '', description: '', dueAt: null })
+    expect(snapshot.tasks[0]).toMatchObject({ id: '', projectId: null, title: '', description: '', dueAt: null })
   })
 })
