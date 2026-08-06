@@ -9,10 +9,12 @@ import { useTenant } from '../tenant/tenant-context'
 
 /**
  * Persistent internal-shell navigation. This is an internal team task/workflow tool only (no client-facing
- * modules) — Clients, Client Portal, Automation, and AI are intentionally absent here; their routes redirect
- * to /tasks (see App.tsx) and their feature code is kept, just unreachable. Per the IA doc (§3 note)
- * navigation filtering is a UX affordance, not authorization — the backend enforces every command — and
- * there is no client-side role→route map to reuse, so every active member sees every nav destination.
+ * modules) — Clients, Client Portal, Automation, AI, and Files are intentionally absent here; their routes
+ * redirect to /tasks (see App.tsx) and their feature code is kept, just unreachable. Files' role — attaching
+ * evidence to a task/step — is covered by the plain Drive-link field on tasks/steps instead. Per the IA doc
+ * (§3 note) navigation filtering is a UX affordance, not authorization — the backend enforces every
+ * command — and there is no client-side role→route map to reuse, so every active member sees every nav
+ * destination.
  */
 interface NavItem { to: string; label: string; icon: typeof CheckSquare; end?: boolean }
 interface NavGroup { title: string; items: NavItem[] }
@@ -54,7 +56,6 @@ const NAV_GROUPS: readonly NavGroup[] = [
     items: [
       { to: '/admin/organization', label: 'إدارة المؤسسة', icon: Settings },
       { to: '/notifications', label: 'الإشعارات', icon: Bell },
-      { to: '/files', label: 'الملفات', icon: FolderKanban },
       { to: '/admin', label: 'الإدارة', icon: Settings, end: true },
     ],
   },

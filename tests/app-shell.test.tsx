@@ -35,8 +35,9 @@ function renderShell(auth: AuthContextValue = ownerAuth, initialPath = '/tasks')
 }
 
 // Every internal destination that must be discoverable from the persistent navigation. This is an
-// internal-only team tool — Clients, Client Portal, Automation, and AI are intentionally absent (their
-// routes still exist and redirect to /tasks, but they are not nav destinations).
+// internal-only team tool — Clients, Client Portal, Automation, AI, and Files are intentionally absent
+// (their routes still exist and redirect to /tasks, but they are not nav destinations). Files' role —
+// attaching evidence to a task/step — is covered by the plain Drive-link field on tasks/steps instead.
 const EXPECTED_LINKS: [string, string][] = [
   ['المهام', '/tasks'], ['المشاريع', '/projects'], ['مساحات العمل', '/workspaces'],
   ['القوالب والعمل المتكرر', '/templates'], ['المراجعات والموافقات', '/approvals'],
@@ -44,7 +45,7 @@ const EXPECTED_LINKS: [string, string][] = [
   ['الحضور والإجازات', '/attendance'], ['كشوف الساعات', '/time'],
   ['التقارير', '/reports'], ['عبء العمل', '/workload'],
   ['إدارة المؤسسة', '/admin/organization'], ['الإشعارات', '/notifications'],
-  ['الملفات', '/files'], ['الإدارة', '/admin'],
+  ['الإدارة', '/admin'],
 ]
 
 describe('AppShell navigation', () => {
@@ -59,12 +60,13 @@ describe('AppShell navigation', () => {
     expect(within(nav).getAllByRole('link')).toHaveLength(EXPECTED_LINKS.length)
   })
 
-  it('does not expose Clients, Automation, or AI Assistant — this is an internal-only tool', () => {
+  it('does not expose Clients, Automation, AI Assistant, or Files — this is an internal-only tool', () => {
     renderShell()
     const nav = screen.getByRole('navigation', { name: 'التنقل الرئيسي' })
     expect(within(nav).queryByRole('link', { name: 'العملاء' })).not.toBeInTheDocument()
     expect(within(nav).queryByRole('link', { name: 'الأتمتة' })).not.toBeInTheDocument()
     expect(within(nav).queryByRole('link', { name: 'مساعد ZAMAM' })).not.toBeInTheDocument()
+    expect(within(nav).queryByRole('link', { name: 'الملفات' })).not.toBeInTheDocument()
   })
 
   it('shows the logged-in user, organization, and a logout action', () => {

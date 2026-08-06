@@ -14,7 +14,6 @@ const WorkflowBuilderPage = lazy(() => import('./features/workflows/WorkflowBuil
 const ReviewInboxPage = lazy(() => import('./features/reviews/ReviewInboxPage').then((module) => ({ default: module.ReviewInboxPage })))
 const TemplateManagementPage = lazy(() => import('./features/templates/TemplateManagementPage').then((module) => ({ default: module.TemplateManagementPage })))
 const CollaborationPage = lazy(() => import('./features/collaboration/CollaborationPage').then((module) => ({ default: module.CollaborationPage })))
-const FileLibraryPage = lazy(() => import('./features/files/FileLibraryPage').then((module) => ({ default: module.FileLibraryPage })))
 const NotificationCenterPage = lazy(() => import('./features/notifications/NotificationCenterPage').then((module) => ({ default: module.NotificationCenterPage })))
 const WorkloadPage = lazy(() => import('./features/workload/WorkloadPage').then((module) => ({ default: module.WorkloadPage })))
 const TimeTrackingPage = lazy(() => import('./features/time/TimeTrackingPage').then((module) => ({ default: module.TimeTrackingPage })))
@@ -56,18 +55,20 @@ function App() {
               <Route path="/approvals" element={<ReviewInboxPage />} />
               <Route path="/templates" element={<TemplateManagementPage />} />
               <Route path="/tasks/:taskId/collaboration" element={<CollaborationPage />} />
-              <Route path="/files" element={<FileLibraryPage />} />
               <Route path="/notifications" element={<NotificationCenterPage />} />
               <Route path="/workload" element={<WorkloadPage />} />
               <Route path="/time" element={<TimeTrackingPage />} />
               <Route path="/attendance" element={<AttendanceLeavePage />} />
               <Route path="/reports" element={<ReportsPage />} />
-              {/* Clients, Client Portal, Automation, and AI are out of scope for this internal-only tool.
-                  The feature code and backend endpoints are intentionally kept (not deleted) in case this
-                  is revisited later — only reachability is removed. Old bookmarks redirect to /tasks. */}
+              {/* Clients, Client Portal, Automation, AI, and Files are out of scope for this internal-only
+                  tool's navigation. The feature code and backend endpoints are intentionally kept (not
+                  deleted) in case this is revisited later — only reachability is removed. Old bookmarks
+                  redirect to /tasks. Files' role — attaching evidence to a task/step — is covered by the
+                  plain Drive-link field on tasks/steps instead of a real upload/library feature. */}
               <Route path="/clients" element={<Navigate to="/tasks" replace />} />
               <Route path="/ai" element={<Navigate to="/tasks" replace />} />
               <Route path="/automations" element={<Navigate to="/tasks" replace />} />
+              <Route path="/files" element={<Navigate to="/tasks" replace />} />
             </Route>
             <Route path="/portal/:organizationSlug" element={<Navigate to="/tasks" replace />} />
             <Route path="/portal/:organizationSlug/projects/:projectId" element={<Navigate to="/tasks" replace />} />
