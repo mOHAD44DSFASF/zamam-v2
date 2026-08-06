@@ -1,18 +1,18 @@
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import {
-  Bell, Bot, Boxes, Building2, CalendarClock, CheckSquare, ClipboardCheck, Clock3, FileText,
-  FolderKanban, Gauge, LayoutList, LogOut, Menu, Settings, Users, UsersRound, Workflow, X,
+  Bell, Boxes, Building2, CalendarClock, CheckSquare, ClipboardCheck, Clock3, FileText,
+  FolderKanban, Gauge, LayoutList, LogOut, Menu, Settings, Users, X,
 } from 'lucide-react'
 import { useAuth } from '../auth/auth-context'
 import { useTenant } from '../tenant/tenant-context'
 
 /**
- * Persistent internal-shell navigation. Groupings follow docs/v2/UI_INFORMATION_ARCHITECTURE.md §1.1
- * (internal shell nav) and §5 (Owner/GM primary navigation), mapped onto the routes that actually exist
- * in App.tsx. Per the IA doc (§3 note) navigation filtering is a UX affordance, not authorization — the
- * backend enforces every command — and there is no client-side role→route map to reuse, so every active
- * member sees every internal destination (an Owner, the primary persona, sees all of them).
+ * Persistent internal-shell navigation. This is an internal team task/workflow tool only (no client-facing
+ * modules) — Clients, Client Portal, Automation, and AI are intentionally absent here; their routes redirect
+ * to /tasks (see App.tsx) and their feature code is kept, just unreachable. Per the IA doc (§3 note)
+ * navigation filtering is a UX affordance, not authorization — the backend enforces every command — and
+ * there is no client-side role→route map to reuse, so every active member sees every nav destination.
  */
 interface NavItem { to: string; label: string; icon: typeof CheckSquare; end?: boolean }
 interface NavGroup { title: string; items: NavItem[] }
@@ -25,43 +25,36 @@ const NAV_GROUPS: readonly NavGroup[] = [
       { to: '/projects', label: 'المشاريع', icon: FolderKanban },
       { to: '/workspaces', label: 'مساحات العمل', icon: Boxes },
       { to: '/templates', label: 'القوالب والعمل المتكرر', icon: LayoutList },
-    ],
-  },
-  {
-    title: 'الوارد والموافقات',
-    items: [
       { to: '/approvals', label: 'المراجعات والموافقات', icon: ClipboardCheck },
-      { to: '/notifications', label: 'الإشعارات', icon: Bell },
     ],
   },
   {
-    title: 'العلاقات والأفراد',
+    title: 'الفريق',
     items: [
-      { to: '/people', label: 'دليل الموظفين', icon: Users },
-      { to: '/clients', label: 'العملاء', icon: UsersRound },
-      { to: '/admin/organization', label: 'الهيكل التنظيمي', icon: Building2 },
+      { to: '/people', label: 'الموظفين', icon: Users },
+      { to: '/admin/organization', label: 'الأقسام', icon: Building2 },
     ],
   },
   {
-    title: 'الوقت والحضور',
+    title: 'الوقت',
     items: [
-      { to: '/time', label: 'الوقت وكشوف الساعات', icon: Clock3 },
       { to: '/attendance', label: 'الحضور والإجازات', icon: CalendarClock },
+      { to: '/time', label: 'كشوف الساعات', icon: Clock3 },
     ],
   },
   {
-    title: 'التحليلات',
+    title: 'التقارير',
     items: [
-      { to: '/workload', label: 'عبء العمل والسعة', icon: Gauge },
-      { to: '/reports', label: 'التقارير ومؤشرات الأداء', icon: FileText },
+      { to: '/reports', label: 'التقارير', icon: FileText },
+      { to: '/workload', label: 'عبء العمل', icon: Gauge },
     ],
   },
   {
-    title: 'النظام',
+    title: 'الإعدادات',
     items: [
-      { to: '/automations', label: 'الأتمتة', icon: Workflow },
-      { to: '/ai', label: 'مساعد ZAMAM', icon: Bot },
-      { to: '/files', label: 'مكتبة الملفات', icon: FolderKanban },
+      { to: '/admin/organization', label: 'إدارة المؤسسة', icon: Settings },
+      { to: '/notifications', label: 'الإشعارات', icon: Bell },
+      { to: '/files', label: 'الملفات', icon: FolderKanban },
       { to: '/admin', label: 'الإدارة', icon: Settings, end: true },
     ],
   },
@@ -83,7 +76,7 @@ function NavContents({ onNavigate }: { onNavigate?: () => void }) {
           <p className="mb-2 px-3 text-xs font-black uppercase tracking-wide text-zamam-textGray/70">{group.title}</p>
           <ul className="space-y-1">
             {group.items.map((item) => (
-              <li key={item.to}>
+              <li key={`${group.title}-${item.to}`}>
                 <NavLink to={item.to} end={item.end} className={linkClasses} onClick={onNavigate}>
                   <item.icon className="size-4 shrink-0" aria-hidden="true" />
                   <span>{item.label}</span>

@@ -86,8 +86,9 @@ export function createProjectHandlers(deps: Deps): HandlerRegistry {
       return { items, nextCursor: page.nextCursor, clients, departments, managers, capabilities }
     },
     '/v1/projects/create': (context, input) => service.create(metadata(context), {
-      id: requireString(input, 'id'), clientId: requireString(input, 'clientId'), name: requireString(input, 'name'),
+      id: requireString(input, 'id'), name: requireString(input, 'name'),
       code: requireString(input, 'code'), managerUserId: requireString(input, 'managerUserId'),
+      ...(typeof input.clientId === 'string' ? { clientId: input.clientId } : {}),
       ...(typeof input.departmentId === 'string' ? { departmentId: input.departmentId } : {}),
       ...(typeof input.startsOn === 'string' ? { startsOn: input.startsOn } : {}),
       ...(typeof input.dueOn === 'string' ? { dueOn: input.dueOn } : {}),

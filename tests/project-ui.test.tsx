@@ -28,6 +28,7 @@ function client(): ProjectManagementClient {
     load: vi.fn().mockResolvedValue(snapshot),
     create: vi.fn().mockResolvedValue(undefined),
     setClientVisibility: vi.fn().mockResolvedValue(undefined),
+    transition: vi.fn().mockResolvedValue(undefined),
   }
 }
 
@@ -59,8 +60,9 @@ describe('project management UI', () => {
     fireEvent.change(screen.getByLabelText('موعد التسليم'), { target: { value: '2026-09-01' } })
     fireEvent.click(screen.getByRole('button', { name: 'إنشاء' }))
     await waitFor(() => expect(api.create).toHaveBeenCalledWith('org-1', expect.objectContaining({
-      clientId: 'client-1', name: 'حملة جديدة', code: 'CMP-1', managerUserId: 'manager-1',
+      name: 'حملة جديدة', code: 'CMP-1', managerUserId: 'manager-1',
     })))
+    expect(api.create).toHaveBeenCalledWith('org-1', expect.not.objectContaining({ clientId: expect.anything() }))
     expect(api.create).toHaveBeenCalledWith('org-1', expect.not.objectContaining({ budgetMinor: expect.anything() }))
   })
 })

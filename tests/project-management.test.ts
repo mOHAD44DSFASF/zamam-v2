@@ -199,4 +199,22 @@ describe('project lifecycle', () => {
     expect(store.records.get('v2Organizations/org-1/project/project-1')).toMatchObject({ status: 'archived', version: 3 })
     expect(store.records.get('v2Organizations/org-1/_clientActiveProjectCounts/client-1')).toMatchObject({ value: 0 })
   })
+
+  it('creates and archives a project with no clientId at all (internal-only tool, no client dependency)', async () => {
+    const store = new MemoryStore()
+    seedDependencies(store)
+    const service = new ProjectService(store, new Gate(), lifecycle())
+    await service.create(metadata(), {
+      id: 'project-2', name: 'مشروع داخلي', code: 'int-1',
+      departmentId: 'dep-1', managerUserId: 'manager-1', clientVisible: false,
+    })
+    const created = store.records.get('v2Organizations/org-1/project/project-2')
+    expect(created).toMatchObject({ code: 'INT-1', status: 'draft', version: 1 })
+    expect(created?.clientId).toBeUndefined()
+    // No client counter is ever created for a clientless project.
+    expect(store.records.has('v2Organizations/org-1/_clientActiveProjectCounts/undefined')).toBe(false)
+    await service.transition(metadata(), 'project-2', 1, 'cancelled')
+    await service.archive(metadata(), 'project-2', 2)
+    expect(store.records.get('v2Organizations/org-1/project/project-2')).toMatchObject({ status: 'archived', version: 3 })
+  })
 })

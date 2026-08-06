@@ -34,15 +34,17 @@ function renderShell(auth: AuthContextValue = ownerAuth, initialPath = '/tasks')
   )
 }
 
-// Every internal destination that must be discoverable from the persistent navigation.
+// Every internal destination that must be discoverable from the persistent navigation. This is an
+// internal-only team tool — Clients, Client Portal, Automation, and AI are intentionally absent (their
+// routes still exist and redirect to /tasks, but they are not nav destinations).
 const EXPECTED_LINKS: [string, string][] = [
   ['المهام', '/tasks'], ['المشاريع', '/projects'], ['مساحات العمل', '/workspaces'],
   ['القوالب والعمل المتكرر', '/templates'], ['المراجعات والموافقات', '/approvals'],
-  ['الإشعارات', '/notifications'], ['دليل الموظفين', '/people'], ['العملاء', '/clients'],
-  ['الهيكل التنظيمي', '/admin/organization'], ['الوقت وكشوف الساعات', '/time'],
-  ['الحضور والإجازات', '/attendance'], ['عبء العمل والسعة', '/workload'],
-  ['التقارير ومؤشرات الأداء', '/reports'], ['الأتمتة', '/automations'],
-  ['مساعد ZAMAM', '/ai'], ['مكتبة الملفات', '/files'], ['الإدارة', '/admin'],
+  ['الموظفين', '/people'], ['الأقسام', '/admin/organization'],
+  ['الحضور والإجازات', '/attendance'], ['كشوف الساعات', '/time'],
+  ['التقارير', '/reports'], ['عبء العمل', '/workload'],
+  ['إدارة المؤسسة', '/admin/organization'], ['الإشعارات', '/notifications'],
+  ['الملفات', '/files'], ['الإدارة', '/admin'],
 ]
 
 describe('AppShell navigation', () => {
@@ -55,6 +57,14 @@ describe('AppShell navigation', () => {
     }
     // Every internal route is discoverable (no page reachable only by typing a URL).
     expect(within(nav).getAllByRole('link')).toHaveLength(EXPECTED_LINKS.length)
+  })
+
+  it('does not expose Clients, Automation, or AI Assistant — this is an internal-only tool', () => {
+    renderShell()
+    const nav = screen.getByRole('navigation', { name: 'التنقل الرئيسي' })
+    expect(within(nav).queryByRole('link', { name: 'العملاء' })).not.toBeInTheDocument()
+    expect(within(nav).queryByRole('link', { name: 'الأتمتة' })).not.toBeInTheDocument()
+    expect(within(nav).queryByRole('link', { name: 'مساعد ZAMAM' })).not.toBeInTheDocument()
   })
 
   it('shows the logged-in user, organization, and a logout action', () => {

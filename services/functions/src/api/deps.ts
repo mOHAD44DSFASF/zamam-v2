@@ -35,7 +35,8 @@ export async function resolveTaskOrProjectResource(
   if (type === 'project') {
     return {
       type: 'project', id, organizationId, projectId: id,
-      visibility: record.clientVisible ? 'client' : 'internal', clientAccountId: String(record.clientId),
+      visibility: record.clientVisible ? 'client' : 'internal',
+      ...(typeof record.clientId === 'string' ? { clientAccountId: record.clientId } : {}),
     }
   }
   let clientAccountId: string | undefined

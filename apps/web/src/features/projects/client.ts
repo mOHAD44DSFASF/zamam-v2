@@ -2,7 +2,7 @@ import { appCheckHeaders, auth } from '../../lib/firebase'
 
 export interface ProjectSummary {
   id: string
-  clientId: string
+  clientId: string | null
   clientName: string
   name: string
   code: string
@@ -35,7 +35,7 @@ export interface ProjectManagementSnapshot {
 export interface ProjectManagementClient {
   load(organizationId: string): Promise<ProjectManagementSnapshot>
   create(organizationId: string, input: {
-    clientId: string; name: string; code: string; departmentId?: string; managerUserId: string;
+    clientId?: string; name: string; code: string; departmentId?: string; managerUserId: string;
     startsOn?: string; dueOn?: string; clientVisible: boolean
   }): Promise<void>
   setClientVisibility(organizationId: string, projectId: string, expectedVersion: number, clientVisible: boolean): Promise<void>
@@ -83,8 +83,8 @@ function toProjectSnapshot(raw: {
   capabilities?: ProjectManagementSnapshot['capabilities']
 }): ProjectManagementSnapshot {
   const projects: ProjectSummary[] = (raw.items ?? []).map((row) => ({
-    id: String(row.id ?? ''), clientId: String(row.clientId ?? ''),
-    clientName: typeof row.clientName === 'string' && row.clientName ? row.clientName : String(row.clientId ?? ''),
+    id: String(row.id ?? ''), clientId: typeof row.clientId === 'string' ? row.clientId : null,
+    clientName: typeof row.clientName === 'string' && row.clientName ? row.clientName : '',
     name: typeof row.name === 'string' ? row.name : '', code: typeof row.code === 'string' ? row.code : '',
     status: (typeof row.status === 'string' ? row.status : 'draft') as ProjectSummary['status'],
     managerName: typeof row.managerName === 'string' ? row.managerName : '',

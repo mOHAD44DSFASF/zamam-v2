@@ -21,7 +21,7 @@ const idSchema = z.string().regex(/^[A-Za-z0-9_-]{2,128}$/)
 const versionSchema = z.number().int().positive()
 const projectSchema = z.object({
   id: idSchema,
-  clientId: idSchema,
+  clientId: idSchema.optional(),
   name: z.string().min(2).max(160),
   code: z.string().min(2).max(32),
   departmentId: idSchema.optional(),
@@ -144,8 +144,10 @@ export class ProjectService {
     assertProjectDateRange(input.startsOn, input.dueOn)
     const context = await this.authorized(metadata, 'project.create', input.id, input.clientId)
     return this.audit.execute(context, async (transaction) => {
-      const client = await readOwned(transaction, tenantDocumentPath(metadata.organizationId, 'client', input.clientId), metadata.organizationId)
-      if (client.status !== 'active') throw new Error('CLIENT_NOT_ACTIVE')
+      if (input.clientId) {
+        const client = await readOwned(transaction, tenantDocumentPath(metadata.organizationId, 'client', input.clientId), metadata.organizationId)
+        if (client.status !== 'active') throw new Error('CLIENT_NOT_ACTIVE')
+      }
       if (input.departmentId) {
         const department = await readOwned(transaction, tenantDocumentPath(metadata.organizationId, 'department', input.departmentId), metadata.organizationId)
         if (department.status !== 'active') throw new Error('DEPARTMENT_NOT_ACTIVE')
@@ -157,20 +159,22 @@ export class ProjectService {
       const existingProject = await transaction.get(path)
       const uniquePath = systemPath(metadata.organizationId, '_uniqueProjectCodes', stableId('project', input.code))
       const uniqueCode = await transaction.get(uniquePath)
-      const countPath = systemPath(metadata.organizationId, '_clientActiveProjectCounts', input.clientId)
-      const counter = await transaction.get(countPath)
+      const countPath = input.clientId ? systemPath(metadata.organizationId, '_clientActiveProjectCounts', input.clientId) : null
+      const counter = countPath ? await transaction.get(countPath) : null
       if (existingProject) throw new Error('ENTITY_ALREADY_EXISTS')
       if (uniqueCode?.active === true) throw new Error('PROJECT_CODE_ALREADY_EXISTS')
       const value = numeric(counter?.value ?? 0) + 1
       // Write phase.
       transaction.create(path, { ...baseRecord(metadata.organizationId), ...input, status: 'draft' })
       transaction.create(uniquePath, { ...baseRecord(metadata.organizationId), active: true, projectId: input.id, normalizedCode: input.code })
-      if (counter) transaction.update(countPath, { value, updatedAt: SERVER_TIMESTAMP })
-      else transaction.create(countPath, { ...baseRecord(metadata.organizationId), value })
+      if (countPath) {
+        if (counter) transaction.update(countPath, { value, updatedAt: SERVER_TIMESTAMP })
+        else transaction.create(countPath, { ...baseRecord(metadata.organizationId), value })
+      }
       return {
         result: { projectId: input.id, version: 1, status: 'draft' as const },
         resourceType: 'project', resourceId: input.id,
-        outbox: { type: 'project.created', version: 1, payload: { projectId: input.id, clientId: input.clientId } },
+        outbox: { type: 'project.created', version: 1, payload: { projectId: input.id, ...(input.clientId ? { clientId: input.clientId } : {}) } },
       }
     })
   }
@@ -323,12 +327,12 @@ export class ProjectService {
       // Read phase — all get()s before any write (Firestore transaction rule).
       const codePath = systemPath(metadata.organizationId, '_uniqueProjectCodes', stableId('project', String(project.code)))
       const code = await transaction.get(codePath)
-      const countPath = systemPath(metadata.organizationId, '_clientActiveProjectCounts', String(project.clientId))
-      const counter = await transaction.get(countPath)
+      const countPath = typeof project.clientId === 'string' ? systemPath(metadata.organizationId, '_clientActiveProjectCounts', project.clientId) : null
+      const counter = countPath ? await transaction.get(countPath) : null
       // Write phase.
       transaction.update(path, { status: 'archived', archivedAt: SERVER_TIMESTAMP, version, updatedAt: SERVER_TIMESTAMP })
       if (code) transaction.update(codePath, { active: false, updatedAt: SERVER_TIMESTAMP })
-      if (counter) transaction.update(countPath, { value: Math.max(0, numeric(counter.value) - 1), updatedAt: SERVER_TIMESTAMP })
+      if (countPath && counter) transaction.update(countPath, { value: Math.max(0, numeric(counter.value) - 1), updatedAt: SERVER_TIMESTAMP })
       return {
         result: { projectId, version, status: 'archived' as const },
         resourceType: 'project', resourceId: projectId,
