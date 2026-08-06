@@ -63,7 +63,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 export const organizationDirectoryClient: OrganizationDirectoryClient = {
   load: (organizationId) => post('/v1/organization/directory/query', { organizationId }),
   createDepartment: (organizationId, input) =>
-    post<void>('/v1/organization/departments/create', { organizationId, ...input }),
+    post<void>('/v1/organization/departments/create', { organizationId, id: crypto.randomUUID(), ...input }),
   createTeam: (organizationId, input) =>
-    post<void>('/v1/organization/teams/create', { organizationId, ...input }),
+    post<void>('/v1/organization/teams/create', { organizationId, id: crypto.randomUUID(), ...input }),
 }

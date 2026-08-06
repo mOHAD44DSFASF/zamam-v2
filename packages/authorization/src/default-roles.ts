@@ -1,7 +1,13 @@
 import { PERMISSIONS, type Permission } from './catalog.js'
 import type { TrustedRole } from './types.js'
 
-export type DefaultRoleName = 'Owner' | 'GeneralManager' | 'DeputyManager' | 'DepartmentManager' | 'TeamLeader' | 'Supervisor' | 'Employee' | 'Contractor' | 'Client' | 'SystemAdministrator'
+export type DefaultRoleName = 'Owner' | 'GeneralManager' | 'DeputyManager' | 'DepartmentManager' | 'Manager' | 'DepartmentLead' | 'TeamLeader' | 'Supervisor' | 'Employee' | 'Contractor' | 'Client' | 'SystemAdministrator'
+
+/** Stable Firestore `role` doc id for a default role name — shared by BootstrapOwnerService (which seeds
+ * every default role into a fresh org) and EmployeeService.invite() (which assigns one), so a role_assignment
+ * always points at a `role` doc that actually exists (see FirestorePolicyStore.load()). */
+export const defaultRoleDocId = (name: DefaultRoleName) =>
+  `default-${name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()}`
 
 const basic: Permission[] = ['organization.view', 'team.view', 'user.view', 'project.view', 'workspace.view', 'task.view', 'file.view', 'file.download', 'notification.view', 'saved_view.create', 'search.use']
 const selfService: Permission[] = ['time.track', 'time.view_self', 'timesheet.submit', 'attendance.view_self', 'attendance.record', 'leave.view_self', 'leave.request', 'workload.view_self', 'report.view_self', 'kpi.view_self']
@@ -14,6 +20,14 @@ const unique = (...sets: readonly Permission[][]) => [...new Set(sets.flat())]
 const owner = PERMISSIONS.filter((permission) => !permission.startsWith('platform.'))
 const governance = new Set<Permission>(['organization.suspend', 'security.policy.manage', 'audit.export', 'support.access.grant', 'role.manage', 'role.assign', 'integration.credential.rotate', 'employment.compensation.view', 'client.financial.view', 'project.financial.view', 'project.financial.manage'])
 const generalManager = owner.filter((permission) => !governance.has(permission))
+// Department Lead: task.create is granted here but enforcement of "own department only" happens entirely
+// via the role ASSIGNMENT's scope (department vs organization) — see engine.ts scopeMatches() and how
+// TaskService now stamps resource.departmentId on task.create. Deliberately excludes task.view_all/
+// team.manage (unlike teamOperations/DepartmentManager) so a Lead's read access stays scoped too.
+const departmentLead = unique(basic, selfService, taskExecutor, [
+  'team.view', 'membership.view', 'task.create', 'task.assign', 'task.reassign',
+  'workload.view_team', 'report.view_team', 'time.view_team', 'attendance.view_team', 'leave.view_team',
+])
 const departmentManager = unique(basic, selfService, taskExecutor, teamOperations, [
   'department.view', 'department.manage', 'team.create', 'team.archive', 'client.view', 'project.create', 'project.manage',
   'project.member.manage', 'workspace.create', 'workspace.manage', 'workspace.member.manage', 'task.archive', 'task.reopen', 'task.watcher.manage', 'comment.moderate',
@@ -31,6 +45,12 @@ export function createDefaultRoles(organizationId: string, policyVersion = 1): R
     GeneralManager: role('GeneralManager', generalManager),
     DeputyManager: role('DeputyManager', ['organization.view']),
     DepartmentManager: role('DepartmentManager', departmentManager),
+    // Manager and Department Lead share the "who can create tasks" shape of DepartmentManager/teamOperations
+    // vs. a narrower, view-scoped set — the org-wide-vs-own-department distinction the product asked for is
+    // NOT a permission-set difference, it's an assignment-SCOPE difference: assign Manager at organization
+    // scope (any department), assign DepartmentLead at department scope (their department only).
+    Manager: role('Manager', departmentManager),
+    DepartmentLead: role('DepartmentLead', departmentLead),
     TeamLeader: role('TeamLeader', unique(basic, selfService, taskExecutor, teamOperations)),
     Supervisor: role('Supervisor', unique(basic, selfService, taskExecutor, ['task.view_all', 'task.assign', 'review.perform', 'project.view', 'workspace.view'])),
     Employee: role('Employee', unique(basic, selfService, taskExecutor)),

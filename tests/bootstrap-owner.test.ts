@@ -72,7 +72,7 @@ describe('BootstrapOwnerService', () => {
     expect(result.actions).toEqual({
       organizationCreated: true, departmentCreated: true, membershipCreated: true,
       employmentCreated: true, roleCreated: true, roleAssignmentCreated: true,
-      sessionViewCreated: true, passwordSet: true,
+      sessionViewCreated: true, passwordSet: true, defaultRolesSeeded: 11,
     })
 
     expect(store.records.get('v2Organizations/org-1/organization/org-1')).toMatchObject({ name: 'Zamam', slug: 'zamam', status: 'active' })
@@ -83,6 +83,10 @@ describe('BootstrapOwnerService', () => {
     expect(role).toMatchObject({ name: 'Owner', status: 'active' })
     expect((role?.permissions as string[]).length).toBeGreaterThan(50)
     expect((role?.permissions as string[])).not.toContain('platform.health.view')
+    // Every default role (not just Owner) is seeded, so an employee invite can assign e.g. "Manager" or
+    // "DepartmentLead" and have it resolve to real permissions immediately.
+    expect(store.records.get('v2Organizations/org-1/role/default-manager')).toMatchObject({ name: 'Manager', status: 'active' })
+    expect(store.records.get('v2Organizations/org-1/role/default-department-lead')).toMatchObject({ name: 'DepartmentLead', status: 'active' })
     expect(store.records.get('v2Organizations/org-1/role_assignment/owner-owner-user')).toMatchObject({
       userId: 'owner-user', roleId: 'default-owner', scopeType: 'organization', scopeId: 'org-1', effect: 'grant', status: 'active',
     })
@@ -112,7 +116,7 @@ describe('BootstrapOwnerService', () => {
     expect(second.actions).toEqual({
       organizationCreated: false, departmentCreated: false, membershipCreated: false,
       employmentCreated: false, roleCreated: false, roleAssignmentCreated: false,
-      sessionViewCreated: false, passwordSet: true,
+      sessionViewCreated: false, passwordSet: true, defaultRolesSeeded: 0,
     })
     expect(store.records.size).toBe(snapshotAfterFirstRun.size)
     for (const [path, value] of snapshotAfterFirstRun) {

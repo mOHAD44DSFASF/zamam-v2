@@ -28,6 +28,7 @@ export interface InviteEmployeeForm {
   startDate: string
   locale: 'ar'
   timezone: string
+  role: 'Employee' | 'DepartmentLead' | 'Manager'
 }
 
 export interface EmployeeDirectoryClient {

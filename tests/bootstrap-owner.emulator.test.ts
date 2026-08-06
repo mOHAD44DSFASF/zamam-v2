@@ -40,7 +40,7 @@ describe('BootstrapOwnerService against a real Firestore transaction', () => {
     expect(first.actions).toEqual({
       organizationCreated: true, departmentCreated: true, membershipCreated: true,
       employmentCreated: true, roleCreated: true, roleAssignmentCreated: true,
-      sessionViewCreated: true, passwordSet: true,
+      sessionViewCreated: true, passwordSet: true, defaultRolesSeeded: 11,
     })
 
     // This is exactly what apps/web/src/auth/session-reader.ts reads to gate ProtectedRoute.
@@ -54,7 +54,7 @@ describe('BootstrapOwnerService against a real Firestore transaction', () => {
     expect(second.actions).toEqual({
       organizationCreated: false, departmentCreated: false, membershipCreated: false,
       employmentCreated: false, roleCreated: false, roleAssignmentCreated: false,
-      sessionViewCreated: false, passwordSet: true,
+      sessionViewCreated: false, passwordSet: true, defaultRolesSeeded: 0,
     })
   })
 })

@@ -1,5 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
-import type { AuthorizationPrincipal, AuthorizationRequest, Permission } from '@zamam/authorization'
+import type { AuthorizationPrincipal, AuthorizationRequest, DefaultRoleName, Permission } from '@zamam/authorization'
+import { defaultRoleDocId } from '@zamam/authorization'
 import {
   SCHEMA_VERSION,
   assertDateOnly,
@@ -21,6 +22,10 @@ import { projectMembershipActive, projectMembershipInactive, sessionViewPath } f
 
 const idSchema = z.string().regex(/^[A-Za-z0-9_-]{2,128}$/)
 const versionSchema = z.number().int().positive()
+// Only the three roles this rollout actually needs are invite-time choices; the rest of the default-role
+// catalog (Owner, GeneralManager, SystemAdministrator, ...) stays assignable only through the bootstrap
+// flow or a future dedicated role-management surface — this is deliberately not a general RBAC UI.
+const inviteRoleSchema = z.enum(['Employee', 'DepartmentLead', 'Manager'])
 const inviteSchema = z.object({
   email: z.string().min(3).max(254),
   displayName: z.string().min(2).max(160),
@@ -33,7 +38,19 @@ const inviteSchema = z.object({
   startDate: z.string(),
   locale: z.enum(['ar', 'en']).default('ar'),
   timezone: z.string().min(1).max(64),
+  role: inviteRoleSchema.default('Employee'),
 }).strict()
+
+/** Employee -> self scope (visibility is per-assignment, see TaskService); DepartmentLead -> scoped to the
+ * department they're being invited into (their "own department"); Manager -> organization-wide. This is
+ * the entire "Manager can create tasks anywhere, DepartmentLead only in their department" distinction —
+ * it lives in assignment SCOPE, not in a different permission set (see engine.ts scopeMatches()). */
+const roleAssignmentScope = (role: z.infer<typeof inviteRoleSchema>, organizationId: string, userId: string, primaryDepartmentId: string) =>
+  role === 'DepartmentLead'
+    ? { scopeType: 'department' as const, scopeId: primaryDepartmentId }
+    : role === 'Manager'
+      ? { scopeType: 'organization' as const, scopeId: organizationId }
+      : { scopeType: 'self' as const, scopeId: userId }
 
 const acceptInvitationSchema = z.object({
   invitationToken: z.string().regex(/^[A-Za-z0-9_-]{32,512}$/),
@@ -202,6 +219,9 @@ export class EmployeeService {
     // (there is no outbound email adapter wired to production credentials yet).
     const invitationToken = randomBytes(32).toString('base64url')
     const tokenHash = createHash('sha256').update(invitationToken).digest('hex')
+    const roleAssignmentId = `role-${identity.userId}`
+    const roleId = defaultRoleDocId(input.role as DefaultRoleName)
+    const rolePath = tenantDocumentPath(metadata.organizationId, 'role', roleId)
     try {
       return await this.audit.execute(context, async (transaction) => {
         const department = await readOwned(
@@ -210,6 +230,8 @@ export class EmployeeService {
           metadata.organizationId,
         )
         if (department.status !== 'active') throw new Error('DEPARTMENT_NOT_ACTIVE')
+        const role = await readOwned(transaction, rolePath, metadata.organizationId)
+        if (role.status !== 'active') throw new Error('ROLE_NOT_ACTIVE')
         const emailIndexPath = systemPath(metadata.organizationId, '_memberEmailHashes', stableId('email', emailHash))
         if ((await transaction.get(emailIndexPath))?.active === true) throw new Error('EMAIL_ALREADY_MEMBER')
         const employeeIndexPath = systemPath(metadata.organizationId, '_employeeNumbers', stableId('employee', input.employeeNumber))
@@ -250,6 +272,11 @@ export class EmployeeService {
         transaction.create(employeeIndexPath, { ...baseRecord(metadata.organizationId), active: true, userId: identity.userId })
         transaction.create(systemPath(metadata.organizationId, '_userAccessState', identity.userId), {
           ...baseRecord(metadata.organizationId), state: 'invited', userId: identity.userId,
+        })
+        const scope = roleAssignmentScope(input.role, metadata.organizationId, identity.userId, input.primaryDepartmentId)
+        transaction.create(tenantDocumentPath(metadata.organizationId, 'role_assignment', roleAssignmentId), {
+          ...baseRecord(metadata.organizationId), userId: identity.userId, roleId,
+          scopeType: scope.scopeType, scopeId: scope.scopeId, effect: 'grant', status: 'active',
         })
         return {
           result: { userId: identity.userId, invitationId, invitationToken, membershipStatus: 'invited' as const },

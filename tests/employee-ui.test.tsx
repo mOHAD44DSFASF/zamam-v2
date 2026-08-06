@@ -33,12 +33,12 @@ describe('employee directory UI', () => {
     expect((await axe(view.container)).violations).toEqual([])
   })
 
-  it('invites without accepting a role field from the client', async () => {
+  it('invites with the default Employee role when the role picker is left untouched', async () => {
     const api = client()
     render(<EmployeeDirectoryScreen organizationId="org-1" client={api} />)
     await screen.findByRole('heading', { name: 'دليل الموظفين' })
     fireEvent.click(screen.getByRole('button', { name: 'دعوة موظف' }))
-    expect(screen.queryByLabelText(/الدور/)).toBeNull()
+    expect(screen.getByLabelText('الدور')).toBeTruthy()
     fireEvent.change(screen.getByLabelText('الاسم الكامل'), { target: { value: 'عمر خالد' } })
     fireEvent.change(screen.getByLabelText('الاسم الأول'), { target: { value: 'عمر' } })
     fireEvent.change(screen.getByLabelText('البريد الإلكتروني'), { target: { value: 'omar@example.com' } })
@@ -47,9 +47,26 @@ describe('employee directory UI', () => {
     fireEvent.change(screen.getByLabelText('تاريخ البدء'), { target: { value: '2026-08-01' } })
     fireEvent.click(screen.getByRole('button', { name: 'إرسال الدعوة' }))
     await waitFor(() => expect(api.invite).toHaveBeenCalledWith('org-1', expect.objectContaining({
-      email: 'omar@example.com', employeeNumber: 'EMP-2', primaryDepartmentId: 'dep-1',
+      email: 'omar@example.com', employeeNumber: 'EMP-2', primaryDepartmentId: 'dep-1', role: 'Employee',
     })))
-    expect(api.invite).toHaveBeenCalledWith('org-1', expect.not.objectContaining({ roleId: expect.anything() }))
+  })
+
+  it('invites a Department Lead when that role is explicitly chosen', async () => {
+    const api = client()
+    render(<EmployeeDirectoryScreen organizationId="org-1" client={api} />)
+    await screen.findByRole('heading', { name: 'دليل الموظفين' })
+    fireEvent.click(screen.getByRole('button', { name: 'دعوة موظف' }))
+    fireEvent.change(screen.getByLabelText('الاسم الكامل'), { target: { value: 'ليلى سعيد' } })
+    fireEvent.change(screen.getByLabelText('الاسم الأول'), { target: { value: 'ليلى' } })
+    fireEvent.change(screen.getByLabelText('البريد الإلكتروني'), { target: { value: 'layla@example.com' } })
+    fireEvent.change(screen.getByLabelText('رقم الموظف'), { target: { value: 'EMP-3' } })
+    fireEvent.change(screen.getByLabelText('المسمى الوظيفي'), { target: { value: 'قائدة قسم' } })
+    fireEvent.change(screen.getByLabelText('تاريخ البدء'), { target: { value: '2026-08-01' } })
+    fireEvent.change(screen.getByLabelText('الدور'), { target: { value: 'DepartmentLead' } })
+    fireEvent.click(screen.getByRole('button', { name: 'إرسال الدعوة' }))
+    await waitFor(() => expect(api.invite).toHaveBeenCalledWith('org-1', expect.objectContaining({
+      email: 'layla@example.com', role: 'DepartmentLead',
+    })))
   })
 
   it('requires a reason and confirmation before a sensitive disable command', async () => {

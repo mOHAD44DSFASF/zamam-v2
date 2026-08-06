@@ -131,6 +131,17 @@ const seedDepartment = (store: MemoryStore) => {
   store.records.set('v2Organizations/org-1/department/dep-1', {
     organizationId: 'org-1', schemaVersion: 2, version: 1, name: 'Operations', code: 'OPS', status: 'active',
   })
+  // invite()'s default role is 'Employee' — the role doc must already exist (BootstrapOwnerService seeds
+  // the full default-role catalog in production; tests seed just what each invite() call needs).
+  store.records.set('v2Organizations/org-1/role/default-employee', {
+    organizationId: 'org-1', schemaVersion: 2, version: 1, name: 'Employee', permissions: ['task.view'], status: 'active',
+  })
+}
+
+const seedRole = (store: MemoryStore, roleDocId: string, name: string) => {
+  store.records.set(`v2Organizations/org-1/role/${roleDocId}`, {
+    organizationId: 'org-1', schemaVersion: 2, version: 1, name, permissions: ['task.create'], status: 'active',
+  })
 }
 
 const seedActiveEmployee = (store: MemoryStore, userId = 'user-1') => {
@@ -152,7 +163,7 @@ const seedActiveEmployee = (store: MemoryStore, userId = 'user-1') => {
 }
 
 describe('employee invitation saga', () => {
-  it('creates tenant-owned invitation records without client role assignment or raw email storage', async () => {
+  it('creates tenant-owned invitation records, a default-Employee role assignment, and no raw email storage', async () => {
     const store = new MemoryStore()
     seedDepartment(store)
     const identities = identityPort()
@@ -177,8 +188,38 @@ describe('employee invitation saga', () => {
       employeeNumber: 'EMP-10', status: 'planned', primaryDepartmentId: 'dep-1',
     })
     expect(JSON.stringify([...store.records.values()])).not.toContain('employee@example.com')
-    expect([...store.records.keys()].some((path) => path.includes('/role_assignment/'))).toBe(false)
+    // No role was chosen, so it defaults to Employee at 'self' scope — visibility is per-assignment
+    // (see TaskService), not org-wide, for a plain Employee.
+    expect(store.records.get('v2Organizations/org-1/role_assignment/role-new-user')).toMatchObject({
+      userId: 'new-user', roleId: 'default-employee', scopeType: 'self', scopeId: 'new-user', effect: 'grant', status: 'active',
+    })
     expect(gate.requests[0]?.permission).toBe('user.invite')
+  })
+
+  it('scopes a Department Lead invite to their own department, and a Manager invite to the organization', async () => {
+    const store = new MemoryStore()
+    seedDepartment(store)
+    seedRole(store, 'default-department-lead', 'DepartmentLead')
+    seedRole(store, 'default-manager', 'Manager')
+    const leadService = new EmployeeService(store, new Gate(), identityPort('lead-user'), lifecyclePort(), invitationPort(store))
+    await leadService.invite(metadata(), {
+      email: 'lead@example.com', displayName: 'قائد القسم', firstName: 'قائد',
+      employeeNumber: 'EMP-11', employmentType: 'employee', primaryDepartmentId: 'dep-1',
+      jobTitle: 'Lead', startDate: '2026-08-01', locale: 'ar', timezone: 'Africa/Cairo', role: 'DepartmentLead',
+    })
+    expect(store.records.get('v2Organizations/org-1/role_assignment/role-lead-user')).toMatchObject({
+      roleId: 'default-department-lead', scopeType: 'department', scopeId: 'dep-1',
+    })
+
+    const managerService = new EmployeeService(store, new Gate(), identityPort('manager-user'), lifecyclePort(), invitationPort(store))
+    await managerService.invite(metadata(), {
+      email: 'manager@example.com', displayName: 'المدير', firstName: 'المدير',
+      employeeNumber: 'EMP-12', employmentType: 'employee', primaryDepartmentId: 'dep-1',
+      jobTitle: 'Manager', startDate: '2026-08-01', locale: 'ar', timezone: 'Africa/Cairo', role: 'Manager',
+    })
+    expect(store.records.get('v2Organizations/org-1/role_assignment/role-manager-user')).toMatchObject({
+      roleId: 'default-manager', scopeType: 'organization', scopeId: 'org-1',
+    })
   })
 
   it('compensates a newly provisioned identity when the tenant transaction fails', async () => {

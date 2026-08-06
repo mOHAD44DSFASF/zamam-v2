@@ -111,6 +111,7 @@ export function createEmployeeHandlers(deps: Deps): HandlerRegistry {
       startDate: requireString(input, 'startDate'), timezone: requireString(input, 'timezone'),
       ...(typeof input.managerUserId === 'string' ? { managerUserId: input.managerUserId } : {}),
       ...(typeof input.locale === 'string' ? { locale: input.locale as 'ar' | 'en' } : {}),
+      ...(typeof input.role === 'string' ? { role: input.role as 'Employee' | 'DepartmentLead' | 'Manager' } : {}),
     }),
     '/v1/employees/disable': (context, input) => service.disable(
       metadata(context), requireString(input, 'userId'), requireNumber(input, 'expectedMembershipVersion'), requireString(input, 'reason'),

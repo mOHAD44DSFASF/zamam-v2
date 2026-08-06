@@ -131,6 +131,41 @@ describe('client and platform boundaries', () => {
   })
 })
 
+describe('Manager vs Department Lead task creation (same shape, different assignment scope)', () => {
+  const createTask = (overrides: Partial<ResourceAuthorizationContext> = {}) =>
+    task({ departmentId: 'department-1', ownerUserId: 'user-1', ...overrides })
+
+  it("a Department Lead assigned to their own department can create tasks there, but not in a different department", () => {
+    const lead = assignment(roles.DepartmentLead, { type: 'department', id: 'department-1' })
+    expect(authorize(principal(), { permission: 'task.create', organizationId, resource: createTask() }, [roles.DepartmentLead], [lead]))
+      .toMatchObject({ allowed: true })
+    expect(authorize(principal(), { permission: 'task.create', organizationId, resource: createTask({ departmentId: 'department-2' }) }, [roles.DepartmentLead], [lead]))
+      .toMatchObject({ allowed: false, reason: 'RESOURCE_SCOPE_DENIED' })
+  })
+
+  it('a Manager assigned at organization scope can create tasks in any department', () => {
+    const manager = assignment(roles.Manager, { type: 'organization', id: organizationId })
+    expect(authorize(principal(), { permission: 'task.create', organizationId, resource: createTask({ departmentId: 'department-1' }) }, [roles.Manager], [manager]))
+      .toMatchObject({ allowed: true })
+    expect(authorize(principal(), { permission: 'task.create', organizationId, resource: createTask({ departmentId: 'department-2' }) }, [roles.Manager], [manager]))
+      .toMatchObject({ allowed: true })
+  })
+
+  it('a plain Employee cannot create tasks in their own or any department (no task.create permission)', () => {
+    const employee = assignment(roles.Employee, { type: 'department', id: 'department-1' })
+    expect(authorize(principal(), { permission: 'task.create', organizationId, resource: createTask() }, [roles.Employee], [employee]))
+      .toMatchObject({ allowed: false, reason: 'PERMISSION_NOT_GRANTED' })
+  })
+
+  it("an Employee's task.view (assigned at 'self' scope) only sees tasks they're an assignee of", () => {
+    const employee = assignment(roles.Employee, { type: 'self', id: 'user-1' })
+    expect(authorize(principal(), { permission: 'task.view', organizationId, resource: task({ assigneeUserIds: ['user-1'] }) }, [roles.Employee], [employee]))
+      .toMatchObject({ allowed: true })
+    expect(authorize(principal(), { permission: 'task.view', organizationId, resource: task({ assigneeUserIds: ['user-2'], ownerUserId: 'user-2' }) }, [roles.Employee], [employee]))
+      .toMatchObject({ allowed: false, reason: 'RESOURCE_SCOPE_DENIED' })
+  })
+})
+
 describe('anti-escalation', () => {
   const scope: AuthorizationScope = { type: 'department', id: 'department-1' }
   it('allows only known permissions already held inside an allowed scope', () => {

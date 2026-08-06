@@ -1,4 +1,4 @@
-import { createDefaultRoles } from '@zamam/authorization'
+import { createDefaultRoles, defaultRoleDocId, type DefaultRoleName } from '@zamam/authorization'
 import { SCHEMA_VERSION, normalizeDirectoryName, normalizeEmail } from '@zamam/domain'
 import { SERVER_TIMESTAMP, tenantDocumentPath, type AtomicStore } from '@zamam/firestore'
 import { z } from 'zod'
@@ -39,6 +39,7 @@ export interface BootstrapOwnerActions {
   roleAssignmentCreated: boolean
   sessionViewCreated: boolean
   passwordSet: boolean
+  defaultRolesSeeded: number
 }
 
 export interface BootstrapOwnerResult {
@@ -88,9 +89,13 @@ export class BootstrapOwnerService {
       passwordSet = true
     }
 
-    const ownerRole = createDefaultRoles(input.organizationId).Owner
+    const defaultRoles = createDefaultRoles(input.organizationId)
+    const ownerRole = defaultRoles.Owner
     const roleAssignmentId = `owner-${identity.userId}`
     const startDate = this.now().toISOString().slice(0, 10)
+    const roleEntries = (Object.entries(defaultRoles) as [DefaultRoleName, ReturnType<typeof createDefaultRoles>[DefaultRoleName]][]).map(([name, role]) => ({
+      role, path: tenantDocumentPath(input.organizationId, 'role', defaultRoleDocId(name)),
+    }))
 
     const actions = await this.store.runTransaction(async (transaction) => {
       // Firestore transactions require every read to happen before any write, so every existence
@@ -118,11 +123,14 @@ export class BootstrapOwnerService {
       const existingRole = await transaction.get(rolePath)
       const existingAssignment = await transaction.get(assignmentPath)
       const existingSessionView = await transaction.get(sessionViewPath)
+      // The full default-role catalog (Owner included, re-checked here too since it shares a path with
+      // one of the entries above — reads are idempotent, so this just re-reads a value already in hand).
+      const existingDefaultRoles = await Promise.all(roleEntries.map((entry) => transaction.get(entry.path)))
 
       const result: BootstrapOwnerActions = {
         organizationCreated: false, departmentCreated: false, membershipCreated: false,
         employmentCreated: false, roleCreated: false, roleAssignmentCreated: false,
-        sessionViewCreated: false, passwordSet,
+        sessionViewCreated: false, passwordSet, defaultRolesSeeded: 0,
       }
 
       if (!existingOrganization) {
@@ -171,6 +179,15 @@ export class BootstrapOwnerService {
         })
         result.roleCreated = true
       }
+
+      roleEntries.forEach((entry, index) => {
+        if (existingDefaultRoles[index] || entry.path === rolePath) return
+        transaction.create(entry.path, {
+          ...base(input.organizationId), name: entry.role.name,
+          permissions: entry.role.permissions, policyVersion: entry.role.policyVersion, status: 'active',
+        })
+        result.defaultRolesSeeded += 1
+      })
 
       if (!existingAssignment) {
         transaction.create(assignmentPath, {

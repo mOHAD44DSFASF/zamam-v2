@@ -45,6 +45,7 @@ function InviteDialog({
               startDate: String(data.get('startDate')),
               locale: 'ar',
               timezone: 'Africa/Cairo',
+              role: (data.get('role') === 'DepartmentLead' || data.get('role') === 'Manager') ? data.get('role') as 'DepartmentLead' | 'Manager' : 'Employee',
             })
             onClose()
           } catch {
@@ -58,7 +59,7 @@ function InviteDialog({
           <h2 id={titleId} className="text-xl font-black">دعوة موظف</h2>
           <button type="button" onClick={onClose} aria-label="إغلاق" className="grid size-9 place-items-center rounded-md hover:bg-gray-100"><X className="size-5" aria-hidden="true" /></button>
         </div>
-        <p className="mt-2 text-sm text-gray-600">تُرسل الدعوة دون دور. تُمنح الأدوار لاحقًا من إدارة الصلاحيات.</p>
+        <p className="mt-2 text-sm text-gray-600">اختر دور الموظف أدناه — "قائد قسم" يمنح صلاحية إنشاء المهام لقسمه فقط، و"مدير" يمنحها في كل الأقسام.</p>
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <label className="text-sm font-semibold">الاسم الكامل<input ref={firstInput} name="displayName" required minLength={2} className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2" /></label>
           <label className="text-sm font-semibold">الاسم الأول<input name="firstName" required minLength={2} className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2" /></label>
@@ -68,6 +69,7 @@ function InviteDialog({
           <label className="text-sm font-semibold">نوع العلاقة<select name="employmentType" className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2"><option value="employee">موظف</option><option value="contractor">متعاون خارجي</option></select></label>
           <label className="text-sm font-semibold">القسم الأساسي<select name="primaryDepartmentId" required className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2">{snapshot.departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></label>
           <label className="text-sm font-semibold">تاريخ البدء<input name="startDate" type="date" required className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2" /></label>
+          <label className="text-sm font-semibold">الدور<select name="role" className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2"><option value="Employee">موظف</option><option value="DepartmentLead">قائد قسم (إنشاء مهام لقسمه فقط)</option><option value="Manager">مدير (إنشاء مهام في كل الأقسام)</option></select></label>
         </div>
         {error && <p role="alert" className="mt-4 text-sm font-semibold text-red-700">{error}</p>}
         <div className="mt-6 flex justify-end gap-3">
