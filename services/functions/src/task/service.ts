@@ -16,6 +16,10 @@ const stepInputSchema = z.object({
   assigneeUserId: id.optional(),
   assigneeDepartmentId: id.optional(),
   driveLink: z.string().optional(),
+  dueAt: z.string().optional(),
+}).strict()
+const setStepDueDateSchema = z.object({
+  taskId: id, stepOrder: z.number().int().min(0), expectedVersion: version, dueAt: z.string().nullable(),
 }).strict()
 const createTaskSchema = z.object({
   id, projectId: id.optional(), workspaceId: id.optional(), parentTaskId: id.optional(), departmentId: id.optional(),
@@ -121,6 +125,7 @@ export class TaskService {
       ...(step.assigneeUserId ? { assigneeUserId: step.assigneeUserId } : {}),
       ...(step.assigneeDepartmentId ? { assigneeDepartmentId: step.assigneeDepartmentId } : {}),
       ...(step.driveLink ? { driveLink: step.driveLink } : {}),
+      ...(step.dueAt ? { dueAt: step.dueAt } : {}),
     }))
     const input = {
       ...parsed, title: normalizeTaskTitle(parsed.title),
@@ -176,9 +181,18 @@ export class TaskService {
       if (await transaction.get(path)) throw new Error('ENTITY_ALREADY_EXISTS')
       // Write phase.
       const { steps, ...taskFields } = input
+      const firstStep = steps[0]!
       transaction.create(path, {
         ...base(metadata.organizationId), ...taskFields, createdBy: metadata.principal.userId,
         status: 'in_progress', currentStepOrder: 0, stepCount: steps.length,
+        // Denormalized current-step summary — kept in sync at every step transition below and in
+        // completeCurrentStep()/sendBackStep() — lets dashboards (Area 3) and the WhatsApp reminder
+        // button (Area 5) read "what's the current step, who holds it, is it stalled" straight off the
+        // task doc instead of an extra per-task step read.
+        currentStepName: normalizeStepName(firstStep.name), currentStepAssigneeType: firstStep.assigneeType,
+        ...(firstStep.assigneeUserId ? { currentStepAssigneeUserId: firstStep.assigneeUserId } : {}),
+        ...(firstStep.assigneeDepartmentId ? { currentStepAssigneeDepartmentId: firstStep.assigneeDepartmentId } : {}),
+        currentStepDueAt: firstStep.dueAt ?? null, currentStepEnteredAt: SERVER_TIMESTAMP,
       })
       const assignedUserIds = new Set<string>()
       let firstStepAssigneeUserIds: readonly string[] = []
@@ -190,6 +204,7 @@ export class TaskService {
           ...(step.assigneeUserId ? { assigneeUserId: step.assigneeUserId } : {}),
           ...(step.assigneeDepartmentId ? { assigneeDepartmentId: step.assigneeDepartmentId } : {}),
           ...(step.driveLink ? { driveLink: step.driveLink } : {}),
+          ...(step.dueAt ? { dueAt: step.dueAt } : {}),
           status: (isCurrent ? 'in_progress' : 'pending') satisfies TaskStepStatus,
         })
         const assigneeUserIds = step.assigneeType === 'person'
@@ -308,11 +323,20 @@ export class TaskService {
         actorUserId: metadata.principal.userId, occurredAt: SERVER_TIMESTAMP,
       })
       if (isLastStep) {
-        transaction.update(taskPath, { status: 'completed', completedAt: SERVER_TIMESTAMP, version: nextVersion, updatedAt: SERVER_TIMESTAMP })
+        transaction.update(taskPath, {
+          status: 'completed', completedAt: SERVER_TIMESTAMP, version: nextVersion, updatedAt: SERVER_TIMESTAMP,
+          currentStepDueAt: null,
+        })
       } else {
         const nextPath = stepPath(metadata.organizationId, taskId, currentOrder + 1)
         transaction.update(nextPath, { status: 'in_progress' as const, version: Number(nextStep!.version) + 1, updatedAt: SERVER_TIMESTAMP })
-        transaction.update(taskPath, { currentStepOrder: currentOrder + 1, version: nextVersion, updatedAt: SERVER_TIMESTAMP })
+        transaction.update(taskPath, {
+          currentStepOrder: currentOrder + 1, version: nextVersion, updatedAt: SERVER_TIMESTAMP,
+          currentStepName: String(nextStep!.name), currentStepAssigneeType: nextStep!.assigneeType,
+          ...(nextStep!.assigneeUserId ? { currentStepAssigneeUserId: nextStep!.assigneeUserId } : { currentStepAssigneeUserId: null }),
+          ...(nextStep!.assigneeDepartmentId ? { currentStepAssigneeDepartmentId: nextStep!.assigneeDepartmentId } : { currentStepAssigneeDepartmentId: null }),
+          currentStepDueAt: nextStep!.dueAt ?? null, currentStepEnteredAt: SERVER_TIMESTAMP,
+        })
       }
       const nextAssignee = nextStep
         ? (nextStep.assigneeType === 'person'
@@ -362,7 +386,13 @@ export class TaskService {
       betweenPaths.forEach((path, index) => {
         transaction.update(path, { status: 'pending' as const, version: Number(betweenSteps[index]!.version) + 1, updatedAt: SERVER_TIMESTAMP })
       })
-      transaction.update(taskPath, { currentStepOrder: input.targetStepOrder, version: nextVersion, updatedAt: SERVER_TIMESTAMP })
+      transaction.update(taskPath, {
+        currentStepOrder: input.targetStepOrder, version: nextVersion, updatedAt: SERVER_TIMESTAMP,
+        currentStepName: String(targetStep.name), currentStepAssigneeType: targetStep.assigneeType,
+        ...(targetStep.assigneeUserId ? { currentStepAssigneeUserId: targetStep.assigneeUserId } : { currentStepAssigneeUserId: null }),
+        ...(targetStep.assigneeDepartmentId ? { currentStepAssigneeDepartmentId: targetStep.assigneeDepartmentId } : { currentStepAssigneeDepartmentId: null }),
+        currentStepDueAt: targetStep.dueAt ?? null, currentStepEnteredAt: SERVER_TIMESTAMP,
+      })
       transaction.create(tenantDocumentPath(metadata.organizationId, 'task_step_event', stepEventId(input.taskId, currentOrder, Number(task.version))), {
         ...base(metadata.organizationId), taskId: input.taskId, stepOrder: currentOrder, fromStatus: currentStep.status,
         toStatus: 'sent_back', actorUserId: metadata.principal.userId, reason, targetStepOrder: input.targetStepOrder,
@@ -375,6 +405,31 @@ export class TaskService {
         result: { taskId: input.taskId, version: nextVersion, currentStepOrder: input.targetStepOrder },
         resourceType: 'task', resourceId: input.taskId,
         outbox: { type: 'task.step_sent_back', version: 1, payload: { taskId: input.taskId, stepOrder: input.targetStepOrder, reason, ...targetAssignee } },
+      }
+    })
+  }
+
+  /** Sets/clears one step's own due date after creation (Area 4) — independent of the task-level dueAt.
+   * If the step being edited is the CURRENT step, keeps the task doc's denormalized currentStepDueAt in
+   * sync so stalled-task computation (isTaskStalled(), domain/task.ts) stays correct without a second call. */
+  async setStepDueDate(metadata: TaskCommandMetadata, raw: z.input<typeof setStepDueDateSchema>) {
+    const input = setStepDueDateSchema.parse(raw)
+    if (input.dueAt) assertTaskDueAt(input.dueAt)
+    const context = await this.authorized(metadata, 'task.update', input.taskId)
+    return this.audit.execute(context, async (transaction) => {
+      const taskPath = tenantDocumentPath(metadata.organizationId, 'task', input.taskId)
+      const task = await owned(transaction, taskPath, metadata.organizationId)
+      const path = stepPath(metadata.organizationId, input.taskId, input.stepOrder)
+      const step = await owned(transaction, path, metadata.organizationId)
+      assertExpected(step, input.expectedVersion)
+      transaction.update(path, { dueAt: input.dueAt, version: input.expectedVersion + 1, updatedAt: SERVER_TIMESTAMP })
+      if (Number(task.currentStepOrder) === input.stepOrder) {
+        transaction.update(taskPath, { currentStepDueAt: input.dueAt, updatedAt: SERVER_TIMESTAMP })
+      }
+      return {
+        result: { taskId: input.taskId, stepOrder: input.stepOrder, version: input.expectedVersion + 1, dueAt: input.dueAt },
+        resourceType: 'task_step', resourceId: `${input.taskId}-step-${input.stepOrder}`,
+        outbox: { type: 'task.updated', version: 1, payload: { taskId: input.taskId } },
       }
     })
   }

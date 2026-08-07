@@ -28,6 +28,7 @@ import { createAutomationHandlers } from './handlers/automation.js'
 import { createAiHandlers } from './handlers/ai.js'
 import { createPortalHandlers } from './handlers/portal.js'
 import { createAuthHandlers } from './handlers/auth.js'
+import { createDashboardHandlers } from './handlers/dashboard.js'
 
 function createStorage() {
   const accountId = process.env.R2_ACCOUNT_ID
@@ -76,6 +77,7 @@ export function composeFeatureCommandDispatcher(firestore: Firestore) {
     ...createAiHandlers(deps),
     ...createPortalHandlers(deps),
     ...createAuthHandlers(deps),
+    ...createDashboardHandlers(deps),
   }
   const identity = new FirestoreIdentityResolver(firestore, getAuth())
   return new ComposedFeatureCommandDispatcher(registry, identity)

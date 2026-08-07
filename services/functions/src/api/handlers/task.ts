@@ -52,6 +52,7 @@ const stepRow = (raw: Record<string, unknown>) => ({
   ...(typeof raw.assigneeUserId === 'string' ? { assigneeUserId: raw.assigneeUserId } : {}),
   ...(typeof raw.assigneeDepartmentId === 'string' ? { assigneeDepartmentId: raw.assigneeDepartmentId } : {}),
   ...(typeof raw.driveLink === 'string' ? { driveLink: raw.driveLink } : {}),
+  ...(typeof raw.dueAt === 'string' ? { dueAt: raw.dueAt } : {}),
   status: String(raw.status ?? 'pending'), version: Number(raw.version ?? 1),
 })
 
@@ -111,8 +112,14 @@ export function createTaskHandlers(deps: Deps): HandlerRegistry {
       const projects = projectPage.items.map((p) => ({ id: String(p.id), name: String(p.name) }))
       const workspaces = workspacePage.items.map((w) => ({ id: String(w.id), name: String(w.name), ...(typeof w.projectId === 'string' ? { projectId: w.projectId } : {}) }))
       const departments = departmentPage.items.map((d) => ({ id: String(d.id), name: String(d.name) }))
-      const memberNames = await resolveNames(deps, context.organizationId, 'user_profile', membershipPage.items.map((m) => String(m.userId)), 'displayName')
-      const members = membershipPage.items.map((m) => ({ userId: String(m.userId), displayName: memberNames.get(String(m.userId)) ?? String(m.userId) }))
+      const memberIds = membershipPage.items.map((m) => String(m.userId))
+      const [memberNames, memberPhones] = await Promise.all([
+        resolveNames(deps, context.organizationId, 'user_profile', memberIds, 'displayName'),
+        resolveNames(deps, context.organizationId, 'user_profile', memberIds, 'whatsappPhone'),
+      ])
+      const members = memberIds.map((userId) => ({
+        userId, displayName: memberNames.get(userId) ?? userId, whatsappPhone: memberPhones.get(userId) ?? null,
+      }))
       // Step names/drive links live in the task_step subcollection, not on the task doc — resolve them for
       // every returned task in one batch pass so the pipeline view has what it needs without N+1 calls.
       const rows = page.items as Record<string, unknown>[]
@@ -161,6 +168,11 @@ export function createTaskHandlers(deps: Deps): HandlerRegistry {
     '/v1/tasks/send-back-step': (context, input) => service.sendBackStep(metadata(context), {
       taskId: requireString(input, 'taskId'), expectedVersion: requireNumber(input, 'expectedVersion'),
       targetStepOrder: requireNumber(input, 'targetStepOrder'), reason: requireString(input, 'reason'),
+    }),
+    '/v1/tasks/steps/set-due-date': (context, input) => service.setStepDueDate(metadata(context), {
+      taskId: requireString(input, 'taskId'), stepOrder: requireNumber(input, 'stepOrder'),
+      expectedVersion: requireNumber(input, 'expectedVersion'),
+      dueAt: input.dueAt === null ? null : requireString(input, 'dueAt'),
     }),
     '/v1/task-views/create': (context, input) => savedViews.create(metadata(context), {
       id: requireString(input, 'id'), name: requireString(input, 'name'), resourceType: 'task',
