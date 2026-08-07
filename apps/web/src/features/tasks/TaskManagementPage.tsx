@@ -1,9 +1,9 @@
-import { AlertTriangle, CalendarDays, CheckSquare, CircleDot, Clock3, Columns3, GanttChart, Link as LinkIcon, LayoutList, LoaderCircle, Pencil, Plus, RefreshCw, Save, Trash2, UserRound, Undo2 } from 'lucide-react'
+import { AlertTriangle, CalendarDays, CheckSquare, CircleDot, Clock3, Columns3, FolderKanban, GanttChart, Link as LinkIcon, LayoutList, LoaderCircle, Pencil, Plus, RefreshCw, Save, Trash2, UserRound, Undo2 } from 'lucide-react'
 import { useCallback, useEffect, useId, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../auth/auth-context'
 import { useTenant } from '../../tenant/tenant-context'
-import { taskClient, type TaskClient, type TaskSnapshot, type TaskStep, type TaskStepInputForm, type TaskSummary } from './client'
+import { taskClient, type TaskClient, type TaskScope, type TaskSnapshot, type TaskStep, type TaskStepInputForm, type TaskSummary } from './client'
 
 const statusLabel: Record<TaskSummary['status'], string> = {
   draft: 'مسودة', ready: 'جاهزة', in_progress: 'قيد التنفيذ', blocked: 'متوقفة',
@@ -29,27 +29,37 @@ export function TaskManagementScreen({ organizationId, client, view = 'list', on
   const [editor, setEditor] = useState<'create' | 'edit' | null>(null)
   const [sendBackTarget, setSendBackTarget] = useState<TaskSummary | null>(null)
   const [actionError, setActionError] = useState('')
+  // undefined = the backend's own smart default (self-scope unless the caller has task.view_all); once the
+  // user picks a scope explicitly it's pinned, so this is a real filter within the page, not a route.
+  const [scope, setScope] = useState<TaskScope | undefined>(undefined)
   const load = useCallback(async () => {
     setStatus('loading')
     try {
-      const value = await client.load(organizationId)
+      const value = await client.load(organizationId, scope)
       setSnapshot(value); setSelectedId((current) => current && value.tasks.some(({ id }) => id === current) ? current : value.tasks[0]?.id ?? null); setStatus('ready')
     } catch { setStatus('error') }
-  }, [client, organizationId])
+  }, [client, organizationId, scope])
   useEffect(() => {
     let active = true
-    client.load(organizationId).then((value) => {
-      if (active) { setSnapshot(value); setSelectedId(value.tasks[0]?.id ?? null); setStatus('ready') }
-    }, () => { if (active) setStatus('error') })
+    client.load(organizationId, scope).then((value) => {
+      if (active) { setSnapshot(value); setSelectedId(value.tasks[0]?.id ?? null); setStatus('ready'); setActionError('') }
+    }, () => {
+      if (!active) return
+      if (scope === 'organization') { setActionError('ليست لديك صلاحية عرض كل المهام. تم عرض مهامك فقط.'); setScope('self') }
+      else setStatus('error')
+    })
     return () => { active = false }
-  }, [client, organizationId])
+  }, [client, organizationId, scope])
 
   if (status === 'loading') return <main dir="rtl" className="grid min-h-screen place-items-center"><p role="status"><LoaderCircle className="inline size-5 animate-spin" aria-hidden="true" /> جارٍ تحميل المهام...</p></main>
   if (status === 'error' || !snapshot) return <main dir="rtl" className="grid min-h-screen place-items-center"><section className="text-center"><AlertTriangle className="mx-auto size-7 text-amber-700" aria-hidden="true" /><h1 className="mt-3 text-xl font-black">تعذر تحميل المهام</h1><button onClick={() => void load()} className="mt-4 inline-flex items-center gap-2 rounded-md border px-4 py-2"><RefreshCw className="size-4" aria-hidden="true" /> إعادة المحاولة</button></section></main>
   const selected = snapshot.tasks.find(({ id }) => id === selectedId) ?? null
   return <main dir="rtl" className="min-h-screen bg-gray-50">
-    <header className="border-b bg-white"><div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-6"><div><p className="text-sm font-bold text-teal-800">العمل</p><h1 className="text-2xl font-black">المهام</h1></div>{snapshot.capabilities.create && <button onClick={() => setEditor('create')} className="inline-flex items-center gap-2 rounded-md bg-teal-800 px-4 py-2 font-bold text-white"><Plus className="size-4" aria-hidden="true" /> مهمة</button>}</div></header>
+    <header className="border-b bg-white"><div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-5 py-6"><div><p className="text-sm font-bold text-teal-800">العمل</p><h1 className="text-2xl font-black">المهام</h1></div><div className="flex flex-wrap items-center gap-2"><Link to="/projects" className="inline-flex items-center gap-2 rounded-md border px-4 py-2 font-bold text-teal-900"><FolderKanban className="size-4" aria-hidden="true" /> مشروع جديد</Link>{snapshot.capabilities.create && <button onClick={() => setEditor('create')} className="inline-flex items-center gap-2 rounded-md bg-teal-800 px-4 py-2 font-bold text-white"><Plus className="size-4" aria-hidden="true" /> مهمة</button>}</div></div></header>
     <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-5 pt-6">
+      <div role="group" aria-label="نطاق المهام" className="inline-flex border bg-white">
+        {([['self', 'مهامي'], ['organization', 'كل المهام']] as const).map(([key, label]) => <button key={key} type="button" aria-pressed={(scope ?? 'self') === key} onClick={() => setScope(key)} className="inline-flex items-center justify-center gap-2 border-l px-3 py-2 text-sm font-bold last:border-l-0 aria-pressed:bg-teal-50 aria-pressed:text-teal-900">{label}</button>)}
+      </div>
       <div role="group" aria-label="طريقة عرض المهام" className="inline-flex border bg-white">
         {([
           ['list', 'قائمة', LayoutList], ['board', 'لوحة', Columns3],

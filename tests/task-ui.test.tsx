@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
+import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { axe } from 'jest-axe'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AuthContext, type AuthContextValue } from '../apps/web/src/auth/auth-context'
 import { TaskManagementScreen } from '../apps/web/src/features/tasks/TaskManagementPage'
@@ -51,9 +53,11 @@ function client(snapshot: TaskSnapshot = snapshotWith()): TaskClient {
 }
 function renderScreen(client_: TaskClient, view?: 'board') {
   return render(
-    <AuthContext.Provider value={ownerAuth}>
-      <TaskManagementScreen organizationId="org-1" client={client_} {...(view ? { view } : {})} />
-    </AuthContext.Provider>,
+    <MemoryRouter>
+      <AuthContext.Provider value={ownerAuth}>
+        <TaskManagementScreen organizationId="org-1" client={client_} {...(view ? { view } : {})} />
+      </AuthContext.Provider>
+    </MemoryRouter>,
   )
 }
 
@@ -67,6 +71,36 @@ describe('task management UI', () => {
     expect(screen.getByText('الكتابة')).toBeTruthy()
     expect(screen.getByText('المراجعة')).toBeTruthy()
     expect((await axe(view.container)).violations).toEqual([])
+  })
+
+  it('offers a project-creation entry point in place of a separate Projects nav destination', async () => {
+    renderScreen(client())
+    await screen.findByRole('heading', { name: 'المهام' })
+    expect(screen.getByRole('link', { name: /مشروع جديد/ })).toHaveAttribute('href', '/projects')
+  })
+
+  it('switches between "مهامي" and "كل المهام" as a filter within the page, not a route change', async () => {
+    const api = client()
+    renderScreen(api)
+    await screen.findByRole('heading', { name: 'المهام' })
+    expect(api.load).toHaveBeenCalledWith('org-1', undefined)
+    const scopeGroup = screen.getByRole('group', { name: 'نطاق المهام' })
+    fireEvent.click(within(scopeGroup).getByRole('button', { name: 'كل المهام' }))
+    await waitFor(() => expect(api.load).toHaveBeenCalledWith('org-1', 'organization'))
+    expect(screen.getByRole('heading', { name: 'المهام' })).toBeTruthy()
+  })
+
+  it('falls back to "مهامي" with an error message if the caller lacks permission to view all tasks', async () => {
+    const api = client()
+    api.load = vi.fn()
+      .mockResolvedValueOnce(snapshotWith())
+      .mockRejectedValueOnce(new Error('AUTHORIZATION_DENIED'))
+      .mockResolvedValueOnce(snapshotWith())
+    renderScreen(api)
+    await screen.findByRole('heading', { name: 'المهام' })
+    fireEvent.click(within(screen.getByRole('group', { name: 'نطاق المهام' })).getByRole('button', { name: 'كل المهام' }))
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('ليست لديك صلاحية عرض كل المهام'))
+    await waitFor(() => expect(api.load).toHaveBeenLastCalledWith('org-1', 'self'))
   })
 
   it('creates a task with a dynamic step (project is optional; steps are required)', async () => {

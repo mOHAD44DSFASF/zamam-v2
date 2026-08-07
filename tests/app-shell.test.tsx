@@ -25,7 +25,10 @@ function renderShell(auth: AuthContextValue = ownerAuth, initialPath = '/tasks')
           <Routes>
             <Route element={<AppShell />}>
               <Route path="/tasks" element={<p>tasks page</p>} />
-              <Route path="/projects" element={<p>projects page</p>} />
+              <Route path="/team/employees" element={<p>team employees page</p>} />
+              <Route path="/team/departments" element={<p>team departments page</p>} />
+              <Route path="/time/attendance" element={<p>time attendance page</p>} />
+              <Route path="/workload" element={<p>workload page</p>} />
             </Route>
           </Routes>
         </MemoryRouter>
@@ -34,62 +37,90 @@ function renderShell(auth: AuthContextValue = ownerAuth, initialPath = '/tasks')
   )
 }
 
-// Every internal destination that must be discoverable from the persistent navigation. This is an
-// internal-only team tool — Clients, Client Portal, Automation, AI, and Files are intentionally absent
-// (their routes still exist and redirect to /tasks, but they are not nav destinations). Files' role —
-// attaching evidence to a task/step — is covered by the plain Drive-link field on tasks/steps instead.
+// Exactly 4 top-level destinations for daily use — everything else lives as in-page tabs under one of
+// these (Team -> Employees/Departments, Time -> Attendance/Leave) or moved off the sidebar entirely
+// (Notifications -> header bell, Settings -> profile menu). See app/TeamPage.tsx, app/TimePage.tsx.
 const EXPECTED_LINKS: [string, string][] = [
-  ['المهام', '/tasks'], ['المشاريع', '/projects'], ['مساحات العمل', '/workspaces'],
-  ['القوالب والعمل المتكرر', '/templates'], ['المراجعات والموافقات', '/approvals'],
-  ['الموظفين', '/people'], ['الأقسام', '/admin/organization'],
-  ['الحضور والإجازات', '/attendance'], ['كشوف الساعات', '/time'],
-  ['التقارير', '/reports'], ['عبء العمل', '/workload'],
-  ['إدارة المؤسسة', '/admin/organization'], ['الإشعارات', '/notifications'],
-  ['الإدارة', '/admin'],
+  ['المهام', '/tasks'], ['الفريق', '/team/employees'], ['الوقت', '/time/attendance'], ['التقارير', '/workload'],
 ]
 
 describe('AppShell navigation', () => {
-  it('renders the persistent RTL navigation with every internal route for an Owner', () => {
+  it('renders exactly 4 top-level nav destinations', () => {
     renderShell()
     const nav = screen.getByRole('navigation', { name: 'التنقل الرئيسي' })
     for (const [label, href] of EXPECTED_LINKS) {
       const link = within(nav).getByRole('link', { name: label })
       expect(link).toHaveAttribute('href', href)
     }
-    // Every internal route is discoverable (no page reachable only by typing a URL).
     expect(within(nav).getAllByRole('link')).toHaveLength(EXPECTED_LINKS.length)
   })
 
-  it('does not expose Clients, Automation, AI Assistant, or Files — this is an internal-only tool', () => {
+  it('does not expose removed/merged items as separate sidebar destinations (Clients/Automation/AI/Files were removed earlier; Employees/Departments/Attendance/Leave/Notifications/Settings moved off the sidebar)', () => {
     renderShell()
     const nav = screen.getByRole('navigation', { name: 'التنقل الرئيسي' })
-    expect(within(nav).queryByRole('link', { name: 'العملاء' })).not.toBeInTheDocument()
-    expect(within(nav).queryByRole('link', { name: 'الأتمتة' })).not.toBeInTheDocument()
-    expect(within(nav).queryByRole('link', { name: 'مساعد ZAMAM' })).not.toBeInTheDocument()
-    expect(within(nav).queryByRole('link', { name: 'الملفات' })).not.toBeInTheDocument()
+    for (const label of ['العملاء', 'الأتمتة', 'مساعد ZAMAM', 'الملفات', 'الموظفين', 'الأقسام', 'الحضور والإجازات', 'الإشعارات', 'الإعدادات', 'المشاريع']) {
+      expect(within(nav).queryByRole('link', { name: label })).not.toBeInTheDocument()
+    }
   })
 
-  it('shows the logged-in user, organization, and a logout action', () => {
-    const auth = { ...ownerAuth, logout: vi.fn() }
-    renderShell(auth)
-    expect(screen.getByText('Zamam Owner')).toBeInTheDocument()
-    expect(screen.getByText('owner@zamam.local')).toBeInTheDocument()
-    expect(screen.getAllByText('org-demo').length).toBeGreaterThan(0)
-    fireEvent.click(screen.getByRole('button', { name: /تسجيل الخروج/ }))
-    expect(auth.logout).toHaveBeenCalled()
+  it('keeps "الفريق" highlighted across its /team/* sub-routes, and "الوقت" across /time/*', () => {
+    renderShell(ownerAuth, '/team/departments')
+    let active = screen.getByRole('link', { name: 'الفريق' })
+    expect(active).toHaveAttribute('aria-current', 'page')
+
+    cleanup()
+    renderShell(ownerAuth, '/time/attendance')
+    active = screen.getByRole('link', { name: 'الوقت' })
+    expect(active).toHaveAttribute('aria-current', 'page')
   })
 
-  it('marks the current route as active and renders page content in the shell', () => {
-    renderShell(ownerAuth, '/projects')
-    expect(screen.getByText('projects page')).toBeInTheDocument()
-    const active = screen.getByRole('link', { name: 'المشاريع' })
+  it('marks the current top-level route active and renders page content in the shell', () => {
+    renderShell(ownerAuth, '/tasks')
+    expect(screen.getByText('tasks page')).toBeInTheDocument()
+    const active = screen.getByRole('link', { name: 'المهام' })
     expect(active.className).toContain('bg-zamam-primary')
-    const inactive = screen.getByRole('link', { name: 'المهام' })
+    const inactive = screen.getByRole('link', { name: 'الفريق' })
     expect(inactive.className).not.toContain('bg-zamam-primary')
   })
 
   it('lays out the shell right-to-left for Arabic', () => {
     const { container } = renderShell()
     expect(container.querySelector('div[dir="rtl"]')).not.toBeNull()
+  })
+})
+
+describe('AppShell header: notification bell', () => {
+  it('renders a bell button in the header (not a sidebar nav item)', () => {
+    renderShell()
+    const nav = screen.getByRole('navigation', { name: 'التنقل الرئيسي' })
+    expect(within(nav).queryByRole('link', { name: 'الإشعارات' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'الإشعارات' })).toBeInTheDocument()
+  })
+
+  it('opens a dropdown panel with a link to the full inbox, not a route change', () => {
+    renderShell()
+    fireEvent.click(screen.getByRole('button', { name: 'الإشعارات' }))
+    expect(screen.getByRole('link', { name: 'عرض الكل' })).toHaveAttribute('href', '/notifications')
+    // Still on the same page — opening the bell did not navigate away.
+    expect(screen.getByText('tasks page')).toBeInTheDocument()
+  })
+})
+
+describe('AppShell header: profile menu (houses Settings)', () => {
+  it('shows the logged-in user identity and a logout action inside the profile menu, not always-visible in the sidebar', () => {
+    const auth = { ...ownerAuth, logout: vi.fn() }
+    renderShell(auth)
+    expect(screen.queryByText('owner@zamam.local')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'قائمة الحساب' }))
+    expect(screen.getAllByText('Zamam Owner').length).toBeGreaterThan(0)
+    expect(screen.getByText('owner@zamam.local')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /تسجيل الخروج/ }))
+    expect(auth.logout).toHaveBeenCalled()
+  })
+
+  it('offers "الإعدادات" (organization administration) inside the profile menu, not as a sidebar tab', () => {
+    renderShell()
+    fireEvent.click(screen.getByRole('button', { name: 'قائمة الحساب' }))
+    expect(screen.getByRole('link', { name: 'الإعدادات' })).toHaveAttribute('href', '/admin/organization')
   })
 })

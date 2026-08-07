@@ -49,8 +49,9 @@ export interface TaskSnapshot {
   members: readonly { userId: string; displayName: string }[]
   capabilities: { create: boolean; update: boolean; transition: boolean; assign: boolean; reopen: boolean; archive: boolean; saveView: boolean }
 }
+export type TaskScope = 'self' | 'organization'
 export interface TaskClient {
-  load(organizationId: string): Promise<TaskSnapshot>
+  load(organizationId: string, scope?: TaskScope): Promise<TaskSnapshot>
   create(organizationId: string, input: {
     projectId?: string; workspaceId?: string; departmentId?: string; title: string; description: string;
     priority: TaskSummary['priority']; dueAt?: string; driveLink?: string; clientVisible: boolean
@@ -151,7 +152,9 @@ export function toTaskSnapshot(response: RawTaskQueryResponse): TaskSnapshot {
 }
 
 export const taskClient: TaskClient = {
-  load: async (organizationId) => toTaskSnapshot(await post('/v1/tasks/query', { organizationId, limit: 50 })),
+  load: async (organizationId, scope) => toTaskSnapshot(await post('/v1/tasks/query', {
+    organizationId, limit: 50, ...(scope ? { scope: { type: scope } } : {}),
+  })),
   create: (organizationId, input) => post('/v1/tasks/create', { organizationId, id: crypto.randomUUID(), ...input }),
   update: (organizationId, input) => post('/v1/tasks/update', { organizationId, ...input }),
   completeStep: (organizationId, taskId, expectedVersion) => post('/v1/tasks/complete-step', { organizationId, taskId, expectedVersion }),
