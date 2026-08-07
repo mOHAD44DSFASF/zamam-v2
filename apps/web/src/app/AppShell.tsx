@@ -1,27 +1,27 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import {
-  Bell, CalendarClock, CheckSquare, ChevronDown, Gauge, LogOut, Menu, Settings, Users, X,
+  Bell, CheckSquare, ChevronDown, Gauge, LayoutDashboard, LogOut, Menu, Settings, UserRound, Users, X,
 } from 'lucide-react'
 import { useAuth } from '../auth/auth-context'
 import { useTenant } from '../tenant/tenant-context'
 import { notificationClient, type NotificationSummary } from '../features/notifications/client'
 
 /**
- * Persistent internal-shell navigation, trimmed to exactly 4 top-level destinations for daily use —
- * everything else either lives as in-page tabs under one of these four (Team -> Employees/Departments,
- * Time -> Attendance/Leave; see app/TeamPage.tsx, app/TimePage.tsx) or moved out of the sidebar entirely
- * (Notifications -> the header bell below; Settings -> the profile menu below). Clients, Client Portal,
- * Automation, AI, and Files remain out of scope for this internal-only tool; their routes redirect to
- * /tasks (see App.tsx) and their feature code is kept, just unreachable. Per the IA doc (§3 note)
- * navigation filtering is a UX affordance, not authorization — the backend enforces every command — and
- * there is no client-side role→route map to reuse, so every active member sees every nav destination.
+ * Persistent internal-shell navigation, trimmed to exactly 3 top-level destinations for daily use —
+ * everything else either lives as in-page tabs under one of these (Team -> Employees/Departments; see
+ * app/TeamPage.tsx) or moved out of the sidebar entirely (Notifications -> the header bell below;
+ * Settings -> the profile menu below). Clients, Client Portal, Automation, AI, Files, and Attendance/Leave
+ * remain out of scope for this internal-only tool; their routes redirect to /tasks or /dashboard (see
+ * App.tsx) and their feature code is kept, just unreachable. Per the IA doc (§3 note) navigation
+ * filtering is a UX affordance, not authorization — the backend enforces every command — and there is no
+ * client-side role→route map to reuse, so every active member sees every nav destination.
  */
 interface NavItem { to: string; label: string; icon: typeof CheckSquare }
 const NAV_ITEMS: readonly NavItem[] = [
+  { to: '/dashboard', label: 'الرئيسية', icon: LayoutDashboard },
   { to: '/tasks', label: 'المهام', icon: CheckSquare },
   { to: '/team/employees', label: 'الفريق', icon: Users },
-  { to: '/time/attendance', label: 'الوقت', icon: CalendarClock },
   { to: '/workload', label: 'التقارير', icon: Gauge },
 ]
 
@@ -148,6 +148,9 @@ function ProfileMenu({ displayName, email, initial, onLogout }: {
               <p className="truncate text-xs text-zamam-textGray">{email}</p>
             </div>
             <div className="p-2">
+              <Link to="/profile" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-bold text-zamam-textGray hover:bg-zamam-light hover:text-zamam-primary">
+                <UserRound className="size-4" aria-hidden="true" /> الملف الشخصي
+              </Link>
               <Link to="/admin/organization" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-bold text-zamam-textGray hover:bg-zamam-light hover:text-zamam-primary">
                 <Settings className="size-4" aria-hidden="true" /> الإعدادات
               </Link>
