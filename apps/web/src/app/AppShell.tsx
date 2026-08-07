@@ -6,9 +6,11 @@ import {
 import { useAuth } from '../auth/auth-context'
 import { useTenant } from '../tenant/tenant-context'
 import { notificationClient, type NotificationSummary } from '../features/notifications/client'
+import { useEscapeToClose } from '../lib/useEscapeToClose'
+import zamamIcon from '../assets/ZAMAM/1T-optimized.webp'
 
 /**
- * Persistent internal-shell navigation, trimmed to exactly 3 top-level destinations for daily use —
+ * Persistent internal-shell navigation, trimmed to exactly 4 top-level destinations for daily use —
  * everything else either lives as in-page tabs under one of these (Team -> Employees/Departments; see
  * app/TeamPage.tsx) or moved out of the sidebar entirely (Notifications -> the header bell below;
  * Settings -> the profile menu below). Clients, Client Portal, Automation, AI, Files, and Attendance/Leave
@@ -27,15 +29,15 @@ const NAV_ITEMS: readonly NavItem[] = [
 
 const linkClasses = (isActive: boolean) =>
   [
-    'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold transition-colors',
+    'flex items-center gap-3 rounded-md px-3 py-2.5 text-body font-bold transition-colors',
     isActive
-      ? 'bg-zamam-primary text-white shadow-sm'
-      : 'text-zamam-textGray hover:bg-zamam-light hover:text-zamam-primary',
+      ? 'bg-brand-500 text-text-primary'
+      : 'text-text-secondary hover:bg-surface-hover hover:text-text-primary',
   ].join(' ')
 
 /** A plain path-prefix match (not react-router's NavLink, whose built-in matching is exact-or-descendant
  * of its own `to`) so /team stays highlighted across every one of its sub-tab routes (/team/employees,
- * /team/departments, ...), same for /time. */
+ * /team/departments, ...). */
 const isSectionActive = (pathname: string, to: string) => {
   const section = to.split('/')[1]
   return section ? pathname === to || pathname.startsWith(`/${section}/`) : pathname === to
@@ -77,15 +79,16 @@ function NotificationBell({ organizationId }: { organizationId: string }) {
     notificationClient.load(organizationId, 'unread').then((snapshot) => setUnread(snapshot.notifications)).catch(() => {})
   }, [organizationId])
   useEffect(() => { load() }, [load])
+  useEscapeToClose(useCallback(() => setOpen(false), []))
   return (
     <div className="relative">
       <button
         type="button" onClick={() => setOpen((value) => !value)} aria-label="الإشعارات" aria-expanded={open}
-        className="relative grid size-10 place-items-center rounded-full text-zamam-textGray hover:bg-zamam-light hover:text-zamam-primary"
+        className="relative grid size-10 cursor-pointer place-items-center rounded-full text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary"
       >
         <Bell className="size-5" aria-hidden="true" />
         {unread.length > 0 && (
-          <span aria-hidden="true" className="absolute -top-0.5 -left-0.5 grid min-w-4.5 place-items-center rounded-full bg-red-600 px-1 py-0.5 text-[10px] font-black leading-none text-white">
+          <span aria-hidden="true" className="absolute -top-0.5 -left-0.5 grid min-w-4.5 place-items-center rounded-full bg-danger px-1 py-0.5 text-[10px] font-black leading-none text-canvas">
             {unread.length > 9 ? '9+' : unread.length}
           </span>
         )}
@@ -94,26 +97,26 @@ function NotificationBell({ organizationId }: { organizationId: string }) {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden="true" />
-          <div dir="rtl" className="absolute left-0 z-50 mt-2 w-80 max-w-[90vw] rounded-xl border border-zamam-gray/60 bg-white shadow-lg">
-            <div className="flex items-center justify-between border-b border-zamam-gray/60 px-4 py-3">
-              <p className="font-black text-zamam-textDark">الإشعارات</p>
-              <Link to="/notifications" onClick={() => setOpen(false)} className="text-xs font-bold text-zamam-primary">عرض الكل</Link>
+          <div dir="rtl" className="absolute left-0 z-50 mt-2 w-80 max-w-[90vw] rounded-lg border border-border-subtle bg-surface-raised shadow-float animate-dropdown-in">
+            <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
+              <p className="font-extrabold text-text-primary">الإشعارات</p>
+              <Link to="/notifications" onClick={() => setOpen(false)} className="text-caption font-bold text-brand-300">عرض الكل</Link>
             </div>
             <ul className="max-h-80 overflow-y-auto">
               {unread.slice(0, 5).map((notification) => (
-                <li key={notification.id} className="border-b border-zamam-gray/40 px-4 py-3 last:border-b-0">
+                <li key={notification.id} className="border-b border-border-subtle last:border-b-0">
                   <button
                     type="button"
                     onClick={() => { void notificationClient.setStatus(organizationId, notification.id, notification.version, 'read').then(load) }}
-                    className="block w-full text-right"
+                    className="block w-full cursor-pointer px-4 py-3 text-right hover:bg-surface-hover"
                   >
-                    <p className="text-sm font-bold text-zamam-textDark">{notification.title}</p>
-                    {notification.preview && <p className="mt-0.5 truncate text-xs text-zamam-textGray">{notification.preview}</p>}
-                    <p className="mt-1 text-[11px] text-zamam-textGray/70">{timeAgo(notification.createdAt)}</p>
+                    <p className="text-body font-bold text-text-primary">{notification.title}</p>
+                    {notification.preview && <p className="mt-0.5 truncate text-caption text-text-secondary">{notification.preview}</p>}
+                    <p className="mt-1 text-[11px] text-text-tertiary">{timeAgo(notification.createdAt)}</p>
                   </button>
                 </li>
               ))}
-              {unread.length === 0 && <li className="px-4 py-8 text-center text-sm text-zamam-textGray">لا توجد إشعارات غير مقروءة.</li>}
+              {unread.length === 0 && <li className="px-4 py-8 text-center text-body text-text-secondary">لا توجد إشعارات غير مقروءة.</li>}
             </ul>
           </div>
         </>
@@ -129,34 +132,35 @@ function ProfileMenu({ displayName, email, initial, onLogout }: {
   onLogout: () => void
 }) {
   const [open, setOpen] = useState(false)
+  useEscapeToClose(useCallback(() => setOpen(false), []))
   return (
     <div className="relative">
       <button
         type="button" onClick={() => setOpen((value) => !value)} aria-label="قائمة الحساب" aria-expanded={open}
-        className="flex items-center gap-2 rounded-full py-1 pe-1 ps-2.5 hover:bg-zamam-light"
+        className="flex cursor-pointer items-center gap-2 rounded-full py-1 pe-1 ps-2.5 transition-colors hover:bg-surface-hover"
       >
-        <span className="hidden text-sm font-bold text-zamam-textDark sm:inline">{displayName}</span>
-        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-zamam-primary to-zamam-navy text-xs font-black text-white">{initial}</span>
-        <ChevronDown className="size-4 text-zamam-textGray" aria-hidden="true" />
+        <span className="hidden text-body font-bold text-text-primary sm:inline">{displayName}</span>
+        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-500 text-label font-black text-text-primary">{initial}</span>
+        <ChevronDown className="size-4 text-text-secondary" aria-hidden="true" />
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden="true" />
-          <div dir="rtl" className="absolute left-0 z-50 mt-2 w-64 max-w-[90vw] rounded-xl border border-zamam-gray/60 bg-white shadow-lg">
-            <div className="border-b border-zamam-gray/60 px-4 py-3">
-              <p className="truncate text-sm font-bold text-zamam-textDark">{displayName}</p>
-              <p className="truncate text-xs text-zamam-textGray">{email}</p>
+          <div dir="rtl" className="absolute left-0 z-50 mt-2 w-64 max-w-[90vw] rounded-lg border border-border-subtle bg-surface-raised shadow-float animate-dropdown-in">
+            <div className="border-b border-border-subtle px-4 py-3">
+              <p className="truncate text-body font-bold text-text-primary">{displayName}</p>
+              <p className="truncate text-caption text-text-secondary">{email}</p>
             </div>
             <div className="p-2">
-              <Link to="/profile" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-bold text-zamam-textGray hover:bg-zamam-light hover:text-zamam-primary">
+              <Link to="/profile" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-md px-3 py-2.5 text-body font-bold text-text-secondary hover:bg-surface-hover hover:text-text-primary">
                 <UserRound className="size-4" aria-hidden="true" /> الملف الشخصي
               </Link>
-              <Link to="/admin/organization" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-bold text-zamam-textGray hover:bg-zamam-light hover:text-zamam-primary">
+              <Link to="/admin/organization" onClick={() => setOpen(false)} className="flex items-center gap-3 rounded-md px-3 py-2.5 text-body font-bold text-text-secondary hover:bg-surface-hover hover:text-text-primary">
                 <Settings className="size-4" aria-hidden="true" /> الإعدادات
               </Link>
               <button
                 type="button" onClick={() => { setOpen(false); onLogout() }}
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50"
+                className="flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2.5 text-body font-bold text-danger hover:bg-danger-subtle"
               >
                 <LogOut className="size-4" aria-hidden="true" /> تسجيل الخروج
               </button>
@@ -174,16 +178,18 @@ export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const displayName = session?.displayName || 'مستخدم'
   const initial = displayName.trim().charAt(0) || '?'
+  useEscapeToClose(useCallback(() => setMobileOpen(false), []))
 
   return (
-    <div dir="rtl" className="flex min-h-screen bg-zamam-light font-['Cairo']">
-      {/* Desktop sidebar (right side in RTL) */}
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-l border-zamam-gray/60 bg-white lg:flex">
-        <div className="flex items-center gap-3 border-b border-zamam-gray/60 px-5 py-5">
-          <div className="grid size-10 place-items-center rounded-2xl bg-gradient-to-br from-zamam-primary to-zamam-navy font-black text-white">Z</div>
+    <div dir="rtl" className="flex min-h-screen bg-canvas">
+      {/* Desktop sidebar (right side in RTL) — the "second neutral layer" (DESIGN.md), a distinct darker
+          plane from the content surface so the shell reads as its own region. */}
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-l border-border-subtle bg-sidebar lg:flex">
+        <div className="flex items-center gap-3 border-b border-border-subtle px-5 py-5">
+          <img src={zamamIcon} alt="زمام" className="size-10 rounded-md object-contain" />
           <div className="leading-tight">
-            <p className="text-base font-black text-zamam-textDark">زمام | ZAMAM</p>
-            <p className="text-xs font-bold text-zamam-textGray">{organizationId ?? 'مساحة العمل'}</p>
+            <p className="text-h3 font-black text-text-primary">زمام | ZAMAM</p>
+            <p className="text-caption font-semibold text-text-secondary">{organizationId ?? 'مساحة العمل'}</p>
           </div>
         </div>
         <NavContents />
@@ -192,14 +198,14 @@ export function AppShell() {
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Top bar — every breakpoint. Carries the mobile menu toggle + brand (desktop already shows the
             brand in its sidebar) and, always, the notification bell and the profile/settings menu. */}
-        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-zamam-gray/60 bg-white px-4 py-3">
+        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border-subtle bg-surface px-4 py-3">
           <div className="flex items-center gap-2 lg:hidden">
-            <div className="grid size-8 place-items-center rounded-xl bg-gradient-to-br from-zamam-primary to-zamam-navy text-sm font-black text-white">Z</div>
-            <span className="font-black text-zamam-textDark">زمام</span>
+            <img src={zamamIcon} alt="زمام" className="size-8 rounded-md object-contain" />
+            <span className="font-black text-text-primary">زمام</span>
           </div>
           <button
             type="button" aria-label="فتح القائمة" aria-expanded={mobileOpen}
-            onClick={() => setMobileOpen(true)} className="rounded-lg p-2 text-zamam-textDark hover:bg-zamam-light lg:hidden"
+            onClick={() => setMobileOpen(true)} className="cursor-pointer rounded-md p-2 text-text-primary hover:bg-surface-hover lg:hidden"
           >
             <Menu className="size-6" aria-hidden="true" />
           </button>
@@ -212,11 +218,11 @@ export function AppShell() {
         {/* Mobile drawer */}
         {mobileOpen && (
           <div className="fixed inset-0 z-50 lg:hidden">
-            <div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} aria-hidden="true" />
-            <aside dir="rtl" className="absolute inset-y-0 right-0 flex w-72 max-w-[85%] flex-col bg-white shadow-xl">
-              <div className="flex items-center justify-between border-b border-zamam-gray/60 px-4 py-3">
-                <span className="font-black text-zamam-textDark">القائمة</span>
-                <button type="button" aria-label="إغلاق القائمة" onClick={() => setMobileOpen(false)} className="rounded-lg p-2 hover:bg-zamam-light">
+            <div className="absolute inset-0 bg-black/60 animate-backdrop-in" onClick={() => setMobileOpen(false)} aria-hidden="true" />
+            <aside dir="rtl" className="absolute inset-y-0 right-0 flex w-72 max-w-[85%] flex-col bg-sidebar shadow-float animate-drawer-in">
+              <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
+                <span className="font-black text-text-primary">القائمة</span>
+                <button type="button" aria-label="إغلاق القائمة" onClick={() => setMobileOpen(false)} className="cursor-pointer rounded-md p-2 text-text-primary hover:bg-surface-hover">
                   <X className="size-5" aria-hidden="true" />
                 </button>
               </div>

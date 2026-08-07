@@ -74,9 +74,9 @@ describe('AppShell navigation', () => {
     renderShell(ownerAuth, '/tasks')
     expect(screen.getByText('tasks page')).toBeInTheDocument()
     const active = screen.getByRole('link', { name: 'المهام' })
-    expect(active.className).toContain('bg-zamam-primary')
+    expect(active.className).toContain('bg-brand-500')
     const inactive = screen.getByRole('link', { name: 'الفريق' })
-    expect(inactive.className).not.toContain('bg-zamam-primary')
+    expect(inactive.className).not.toContain('bg-brand-500')
   })
 
   it('lays out the shell right-to-left for Arabic', () => {
