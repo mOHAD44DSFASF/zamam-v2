@@ -280,3 +280,60 @@ describe('task step pipeline', () => {
     expect(gate.requests[0]).toMatchObject({ permission: 'task.create', resource: { departmentId: 'dep-1' } })
   })
 })
+
+describe('Area 4: per-step due dates and the denormalized current-step summary (stalled-task computation)', () => {
+  const twoPersonSteps = [
+    { name: 'الخطوة الأولى', assigneeType: 'person' as const, assigneeUserId: 'user-2', dueAt: '2026-08-10T00:00:00.000Z' },
+    { name: 'الخطوة الثانية', assigneeType: 'person' as const, assigneeUserId: 'user-1' },
+  ]
+
+  it('denormalizes the first step\'s name/assignee/dueAt onto the task doc at creation, for stalled-task queries that read the task alone (no per-task step fetch)', async () => {
+    const store = new MemoryStore(); seed(store)
+    const service = new TaskService(store, new Gate(), references(), departmentsPort())
+    await service.create(metadata(), { id: 'task-denorm', title: 'مهمة بموعد خطوة', steps: twoPersonSteps })
+    expect(store.records.get('v2Organizations/org-1/task/task-denorm')).toMatchObject({
+      currentStepName: 'الخطوة الأولى', currentStepAssigneeType: 'person', currentStepAssigneeUserId: 'user-2',
+      currentStepDueAt: '2026-08-10T00:00:00.000Z',
+    })
+    expect(store.records.get('v2Organizations/org-1/task_step/task-denorm-step-0')).toMatchObject({ dueAt: '2026-08-10T00:00:00.000Z' })
+  })
+
+  it('keeps the denormalized current-step summary in sync when completeCurrentStep() advances to a step with no due date', async () => {
+    const store = new MemoryStore(); seed(store)
+    const service = new TaskService(store, new Gate(), references(), departmentsPort())
+    await service.create(metadata(), { id: 'task-advance', title: 'مهمة تقدم', steps: twoPersonSteps })
+    await service.completeCurrentStep(metadata(principal('user-2')), 'task-advance', 1)
+    expect(store.records.get('v2Organizations/org-1/task/task-advance')).toMatchObject({
+      currentStepName: 'الخطوة الثانية', currentStepAssigneeUserId: 'user-1', currentStepDueAt: null,
+    })
+  })
+
+  it('keeps the denormalized current-step summary in sync when sendBackStep() moves back to an earlier step', async () => {
+    const store = new MemoryStore(); seed(store)
+    const service = new TaskService(store, new Gate(), references(), departmentsPort())
+    await service.create(metadata(), { id: 'task-back', title: 'مهمة إرجاع', steps: twoPersonSteps })
+    await service.completeCurrentStep(metadata(principal('user-2')), 'task-back', 1)
+    await service.sendBackStep(metadata(principal('user-1')), {
+      taskId: 'task-back', expectedVersion: 2, targetStepOrder: 0, reason: 'نقص في المتطلبات الأساسية',
+    })
+    expect(store.records.get('v2Organizations/org-1/task/task-back')).toMatchObject({
+      currentStepName: 'الخطوة الأولى', currentStepAssigneeUserId: 'user-2', currentStepDueAt: '2026-08-10T00:00:00.000Z',
+    })
+  })
+
+  it('setStepDueDate() updates the step and, only when it is the CURRENT step, the task doc\'s denormalized currentStepDueAt too', async () => {
+    const store = new MemoryStore(); seed(store)
+    const service = new TaskService(store, new Gate(), references(), departmentsPort())
+    await service.create(metadata(), { id: 'task-setdue', title: 'مهمة تعديل موعد', steps: twoPersonSteps })
+
+    // Step 1 (order 1) is NOT current — editing its due date must not touch the task's currentStepDueAt.
+    await service.setStepDueDate(metadata(), { taskId: 'task-setdue', stepOrder: 1, expectedVersion: 1, dueAt: '2026-09-01T00:00:00.000Z' })
+    expect(store.records.get('v2Organizations/org-1/task_step/task-setdue-step-1')).toMatchObject({ dueAt: '2026-09-01T00:00:00.000Z' })
+    expect(store.records.get('v2Organizations/org-1/task/task-setdue')).toMatchObject({ currentStepDueAt: '2026-08-10T00:00:00.000Z' })
+
+    // Step 0 IS current — editing (or clearing) its due date updates the task's denormalized field too.
+    await service.setStepDueDate(metadata(), { taskId: 'task-setdue', stepOrder: 0, expectedVersion: 1, dueAt: null })
+    expect(store.records.get('v2Organizations/org-1/task_step/task-setdue-step-0')).toMatchObject({ dueAt: null })
+    expect(store.records.get('v2Organizations/org-1/task/task-setdue')).toMatchObject({ currentStepDueAt: null })
+  })
+})

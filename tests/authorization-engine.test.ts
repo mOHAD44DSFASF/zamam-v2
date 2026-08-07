@@ -151,6 +151,21 @@ describe('Manager vs Department Lead task creation (same shape, different assign
       .toMatchObject({ allowed: true })
   })
 
+  it('Area 1: only Owner/GeneralManager and Manager can invite/create members — Manager gets user.invite added on top of the shared departmentManager set, DepartmentLead and DepartmentManager do not', () => {
+    expect(roles.Owner.permissions).toContain('user.invite')
+    expect(roles.GeneralManager.permissions).toContain('user.invite')
+    expect(roles.Manager.permissions).toContain('user.invite')
+    expect(roles.DepartmentLead.permissions).not.toContain('user.invite')
+    expect(roles.DepartmentManager.permissions).not.toContain('user.invite')
+    expect(roles.Employee.permissions).not.toContain('user.invite')
+    const manager = assignment(roles.Manager, { type: 'organization', id: organizationId })
+    expect(authorize(principal(), { permission: 'user.invite', organizationId }, [roles.Manager], [manager]))
+      .toMatchObject({ allowed: true })
+    const lead = assignment(roles.DepartmentLead, { type: 'department', id: 'department-1' })
+    expect(authorize(principal(), { permission: 'user.invite', organizationId }, [roles.DepartmentLead], [lead]))
+      .toMatchObject({ allowed: false, reason: 'PERMISSION_NOT_GRANTED' })
+  })
+
   it('a plain Employee cannot create tasks in their own or any department (no task.create permission)', () => {
     const employee = assignment(roles.Employee, { type: 'department', id: 'department-1' })
     expect(authorize(principal(), { permission: 'task.create', organizationId, resource: createTask() }, [roles.Employee], [employee]))

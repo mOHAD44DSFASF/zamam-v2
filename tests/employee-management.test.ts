@@ -465,6 +465,125 @@ describe('employee disable and departure', () => {
   })
 })
 
+describe('Area 1: direct member creation', () => {
+  it('creates an active membership immediately (no invitation/token step), returns a strong one-time temporary password, and marks mustChangePassword', async () => {
+    const store = new MemoryStore()
+    seedDepartment(store)
+    const identities = identityPort('direct-user')
+    const gate = new Gate()
+    const service = new EmployeeService(store, gate, identities, lifecyclePort(), invitationPort(store))
+    const result = await service.createDirect(metadata(), {
+      email: 'direct@example.com', displayName: 'عضو مباشر', firstName: 'عضو',
+      employeeNumber: 'EMP-40', employmentType: 'employee', primaryDepartmentId: 'dep-1',
+      jobTitle: 'محلل', startDate: '2026-08-01', locale: 'ar', timezone: 'Africa/Cairo',
+      whatsappPhone: '+966501234567',
+    })
+
+    expect(result.result.userId).toBe('direct-user')
+    expect(result.result.membershipStatus).toBe('active')
+    // The plaintext password is only ever handed back in this response — it is never written onto the
+    // membership/employment/profile records themselves (it does land inside the command's own idempotency
+    // replay record, same as every other command's result, which is how replaying a retried request works).
+    expect(typeof result.result.temporaryPassword).toBe('string')
+    expect(result.result.temporaryPassword.length).toBeGreaterThanOrEqual(20)
+    expect(identities.setPassword).toHaveBeenCalledWith('direct-user', result.result.temporaryPassword)
+
+    expect(store.records.get('v2Organizations/org-1/organization_membership/direct-user')).toMatchObject({ status: 'active' })
+    expect(store.records.get('v2Organizations/org-1/employment_profile/direct-user')).toMatchObject({
+      status: 'active', mustChangePassword: true,
+    })
+    expect(store.records.get('v2Organizations/org-1/user_profile/direct-user')).toMatchObject({
+      whatsappPhone: '+966501234567',
+    })
+    // Immediately loginable — sessionViews is projected right away (no separate accept step), with the
+    // force-password-change flag ProtectedRoute's gate reads (apps/web/src/auth/ProtectedRoute.tsx).
+    expect(store.records.get('sessionViews/direct-user')).toMatchObject({
+      userId: 'direct-user', accountStatus: 'active', mustChangePassword: true,
+      memberships: [{ organizationId: 'org-1', status: 'active' }],
+    })
+    expect(gate.requests[0]?.permission).toBe('user.invite')
+  })
+
+  it('rejects a malformed WhatsApp number instead of silently storing garbage', async () => {
+    const store = new MemoryStore()
+    seedDepartment(store)
+    const service = new EmployeeService(store, new Gate(), identityPort(), lifecyclePort(), invitationPort(store))
+    await expect(service.createDirect(metadata(), {
+      email: 'bad@example.com', displayName: 'رقم خاطئ', firstName: 'رقم',
+      employeeNumber: 'EMP-41', employmentType: 'employee', primaryDepartmentId: 'dep-1',
+      jobTitle: 'محلل', startDate: '2026-08-01', locale: 'ar', timezone: 'Africa/Cairo',
+      whatsappPhone: 'not-a-phone',
+    })).rejects.toThrow('INVALID_WHATSAPP_PHONE')
+  })
+
+  it('compensates the provisioned identity if the creation transaction fails (e.g. a duplicate employee number)', async () => {
+    const store = new MemoryStore()
+    seedDepartment(store)
+    const firstIdentities = identityPort('direct-user-1')
+    const firstService = new EmployeeService(store, new Gate(), firstIdentities, lifecyclePort(), invitationPort(store))
+    await firstService.createDirect(metadata(), {
+      email: 'first@example.com', displayName: 'الأول', firstName: 'الأول',
+      employeeNumber: 'EMP-50', employmentType: 'employee', primaryDepartmentId: 'dep-1',
+      jobTitle: 'محلل', startDate: '2026-08-01', locale: 'ar', timezone: 'Africa/Cairo',
+      whatsappPhone: '+966501234567',
+    })
+
+    const identities = identityPort('direct-user-2')
+    const service = new EmployeeService(store, new Gate(), identities, lifecyclePort(), invitationPort(store))
+    await expect(service.createDirect(metadata(), {
+      email: 'dupe@example.com', displayName: 'مكرر', firstName: 'مكرر',
+      employeeNumber: 'EMP-50', employmentType: 'employee', primaryDepartmentId: 'dep-1',
+      jobTitle: 'محلل', startDate: '2026-08-01', locale: 'ar', timezone: 'Africa/Cairo',
+      whatsappPhone: '+966501234568',
+    })).rejects.toThrow('EMPLOYEE_NUMBER_ALREADY_EXISTS')
+    expect(identities.compensateInvitation).toHaveBeenCalledWith('direct-user-2', expect.any(String))
+    expect(store.records.has('v2Organizations/org-1/organization_membership/direct-user-2')).toBe(false)
+  })
+})
+
+describe('Area 1: self-service password change and WhatsApp number', () => {
+  it('changeOwnPassword clears mustChangePassword on both employment_profile and sessionViews, with no RBAC gate (self-service)', async () => {
+    const store = new MemoryStore()
+    seedActiveEmployee(store, 'user-1')
+    store.records.set('v2Organizations/org-1/employment_profile/user-1', {
+      ...store.records.get('v2Organizations/org-1/employment_profile/user-1'), mustChangePassword: true,
+    })
+    store.records.set('sessionViews/user-1', {
+      userId: 'user-1', displayName: 'Active Employee', accountStatus: 'active', mustChangePassword: true,
+      memberships: [{ organizationId: 'org-1', status: 'active' }],
+    })
+    const identities = identityPort()
+    const gate = new Gate()
+    const service = new EmployeeService(store, gate, identities, lifecyclePort(), invitationPort(store))
+    const selfPrincipal: AuthorizationPrincipal = { ...principal, userId: 'user-1' }
+    const result = await service.changeOwnPassword(
+      { organizationId: 'org-1', principal: selfPrincipal, correlationId: 'c-1', idempotencyKey: 'idempotency-key-1', fingerprint: 'f-1' },
+      { newPassword: 'a-brand-new-strong-password' },
+    )
+    expect(result.result).toEqual({ userId: 'user-1', mustChangePassword: false })
+    expect(identities.setPassword).toHaveBeenCalledWith('user-1', 'a-brand-new-strong-password')
+    expect(store.records.get('v2Organizations/org-1/employment_profile/user-1')).toMatchObject({ mustChangePassword: false })
+    expect(store.records.get('sessionViews/user-1')).toMatchObject({ mustChangePassword: false })
+    expect(gate.requests).toHaveLength(0)
+  })
+
+  it('updateOwnWhatsappPhone normalizes and stores the caller\'s own number', async () => {
+    const store = new MemoryStore()
+    seedActiveEmployee(store, 'user-1')
+    store.records.set('v2Organizations/org-1/user_profile/user-1', {
+      organizationId: 'org-1', schemaVersion: 2, version: 1, userId: 'user-1', displayName: 'Active Employee',
+    })
+    const service = new EmployeeService(store, new Gate(), identityPort(), lifecyclePort(), invitationPort(store))
+    const selfPrincipal: AuthorizationPrincipal = { ...principal, userId: 'user-1' }
+    const result = await service.updateOwnWhatsappPhone(
+      { organizationId: 'org-1', principal: selfPrincipal, correlationId: 'c-2', idempotencyKey: 'idempotency-key-2', fingerprint: 'f-2' },
+      { whatsappPhone: '966 50 123 4567' },
+    )
+    expect(result.result.whatsappPhone).toBe('+966501234567')
+    expect(store.records.get('v2Organizations/org-1/user_profile/user-1')).toMatchObject({ whatsappPhone: '+966501234567' })
+  })
+})
+
 describe('employee scheduling and field projections', () => {
   it('upserts a bounded work schedule and links it to active employment', async () => {
     const store = new MemoryStore()

@@ -24,10 +24,10 @@ function renderShell(auth: AuthContextValue = ownerAuth, initialPath = '/tasks')
         <MemoryRouter initialEntries={[initialPath]}>
           <Routes>
             <Route element={<AppShell />}>
+              <Route path="/dashboard" element={<p>dashboard page</p>} />
               <Route path="/tasks" element={<p>tasks page</p>} />
               <Route path="/team/employees" element={<p>team employees page</p>} />
               <Route path="/team/departments" element={<p>team departments page</p>} />
-              <Route path="/time/attendance" element={<p>time attendance page</p>} />
               <Route path="/workload" element={<p>workload page</p>} />
             </Route>
           </Routes>
@@ -38,10 +38,11 @@ function renderShell(auth: AuthContextValue = ownerAuth, initialPath = '/tasks')
 }
 
 // Exactly 4 top-level destinations for daily use — everything else lives as in-page tabs under one of
-// these (Team -> Employees/Departments, Time -> Attendance/Leave) or moved off the sidebar entirely
-// (Notifications -> header bell, Settings -> profile menu). See app/TeamPage.tsx, app/TimePage.tsx.
+// these (Team -> Employees/Departments) or moved off the sidebar entirely (Notifications -> header bell,
+// Settings -> profile menu). Attendance/Leave were removed from the UI entirely (backend kept, unreachable).
+// See app/TeamPage.tsx, app/DashboardPage.tsx.
 const EXPECTED_LINKS: [string, string][] = [
-  ['المهام', '/tasks'], ['الفريق', '/team/employees'], ['الوقت', '/time/attendance'], ['التقارير', '/workload'],
+  ['الرئيسية', '/dashboard'], ['المهام', '/tasks'], ['الفريق', '/team/employees'], ['التقارير', '/workload'],
 ]
 
 describe('AppShell navigation', () => {
@@ -55,22 +56,17 @@ describe('AppShell navigation', () => {
     expect(within(nav).getAllByRole('link')).toHaveLength(EXPECTED_LINKS.length)
   })
 
-  it('does not expose removed/merged items as separate sidebar destinations (Clients/Automation/AI/Files were removed earlier; Employees/Departments/Attendance/Leave/Notifications/Settings moved off the sidebar)', () => {
+  it('does not expose removed/merged items as separate sidebar destinations (Clients/Automation/AI/Files/Time were removed earlier; Employees/Departments/Notifications/Settings moved off the sidebar)', () => {
     renderShell()
     const nav = screen.getByRole('navigation', { name: 'التنقل الرئيسي' })
-    for (const label of ['العملاء', 'الأتمتة', 'مساعد ZAMAM', 'الملفات', 'الموظفين', 'الأقسام', 'الحضور والإجازات', 'الإشعارات', 'الإعدادات', 'المشاريع']) {
+    for (const label of ['العملاء', 'الأتمتة', 'مساعد ZAMAM', 'الملفات', 'الموظفين', 'الأقسام', 'الوقت', 'الحضور والإجازات', 'الإشعارات', 'الإعدادات', 'المشاريع']) {
       expect(within(nav).queryByRole('link', { name: label })).not.toBeInTheDocument()
     }
   })
 
-  it('keeps "الفريق" highlighted across its /team/* sub-routes, and "الوقت" across /time/*', () => {
+  it('keeps "الفريق" highlighted across its /team/* sub-routes', () => {
     renderShell(ownerAuth, '/team/departments')
-    let active = screen.getByRole('link', { name: 'الفريق' })
-    expect(active).toHaveAttribute('aria-current', 'page')
-
-    cleanup()
-    renderShell(ownerAuth, '/time/attendance')
-    active = screen.getByRole('link', { name: 'الوقت' })
+    const active = screen.getByRole('link', { name: 'الفريق' })
     expect(active).toHaveAttribute('aria-current', 'page')
   })
 
