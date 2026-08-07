@@ -1,5 +1,5 @@
 import { signInWithEmailAndPassword } from 'firebase/auth'
-import { LogOut } from 'lucide-react'
+import { KeyRound, LogOut } from 'lucide-react'
 import { useState } from 'react'
 import { employeeDirectoryClient } from '../features/employees/client'
 import { auth } from '../lib/firebase'
@@ -43,39 +43,62 @@ export function ForcePasswordChangeScreen() {
   }
 
   return (
-    <main dir="rtl" className="min-h-screen bg-gray-50 grid place-items-center p-6">
-      <section className="w-full max-w-md bg-white border border-gray-200 p-6 text-right shadow-sm">
-        <h1 className="text-xl font-bold text-gray-900">يلزم تعيين كلمة مرور جديدة</h1>
-        <p className="mt-3 text-sm leading-7 text-gray-600">
+    <main dir="rtl" className="min-h-screen min-h-[100dvh] bg-canvas grid place-items-center p-6">
+      <section className="w-full max-w-md rounded-lg border border-border-subtle bg-surface p-8 text-right shadow-float">
+        <div className="mb-6 flex justify-center">
+          <span className="grid size-12 place-items-center rounded-full bg-brand-subtle text-brand-300">
+            <KeyRound className="size-6" aria-hidden="true" />
+          </span>
+        </div>
+
+        <h1 className="text-h1 font-extrabold text-text-primary text-center">يلزم تعيين كلمة مرور جديدة</h1>
+        <p className="mt-3 text-body leading-7 text-text-secondary text-center">
           تم إنشاء حسابك بكلمة مرور مؤقتة. لمتابعة استخدام النظام، يرجى تعيين كلمة مرور جديدة الآن.
         </p>
-        <form onSubmit={submit} className="mt-6 space-y-4">
-          <label className="block text-sm font-bold text-gray-700">
-            كلمة المرور الجديدة
+
+        <form onSubmit={submit} className="mt-8 space-y-5">
+          <div className="space-y-2">
+            <label htmlFor="force-password-new" className="block text-label font-semibold text-text-secondary mr-1">
+              كلمة المرور الجديدة
+            </label>
             <input
+              id="force-password-new"
               type="password" required minLength={12} value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="mt-2 w-full rounded-md border border-gray-300 p-2.5"
+              className="w-full rounded-md border border-border-strong bg-canvas p-3 text-body text-text-primary transition-colors focus:border-brand-400 placeholder:text-text-tertiary"
             />
-          </label>
-          <label className="block text-sm font-bold text-gray-700">
-            تأكيد كلمة المرور
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="force-password-confirm" className="block text-label font-semibold text-text-secondary mr-1">
+              تأكيد كلمة المرور
+            </label>
             <input
+              id="force-password-confirm"
               type="password" required minLength={12} value={confirm}
               onChange={(event) => setConfirm(event.target.value)}
-              className="mt-2 w-full rounded-md border border-gray-300 p-2.5"
+              className="w-full rounded-md border border-border-strong bg-canvas p-3 text-body text-text-primary transition-colors focus:border-brand-400 placeholder:text-text-tertiary"
             />
-          </label>
-          {error && <p role="alert" className="text-sm font-bold text-red-700">{error}</p>}
+          </div>
+
+          {error && (
+            <p role="alert" className="rounded-md border border-danger/30 bg-danger-subtle px-4 py-3 text-body font-semibold text-danger">
+              {error}
+            </p>
+          )}
+
           <button
             type="submit" disabled={submitting}
-            className="w-full rounded-md bg-zamam-primary px-4 py-2.5 font-bold text-white disabled:opacity-50"
+            className="w-full rounded-md bg-brand-500 px-4 py-3 text-body font-bold text-text-primary transition-all hover:bg-brand-400 active:scale-[0.98] active:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100 cursor-pointer"
           >
             {submitting ? 'جارٍ الحفظ...' : 'حفظ كلمة المرور'}
           </button>
         </form>
-        <button type="button" onClick={() => void logout()} className="mt-6 inline-flex items-center gap-2 text-red-700">
-          <LogOut aria-hidden="true" size={18} /> تسجيل الخروج
+
+        <button
+          type="button" onClick={() => void logout()}
+          className="mt-6 inline-flex items-center gap-2 rounded-sm text-label font-semibold text-danger transition-colors hover:text-danger/80 cursor-pointer"
+        >
+          <LogOut aria-hidden="true" size={16} /> تسجيل الخروج
         </button>
       </section>
     </main>

@@ -22,22 +22,22 @@ export function PasswordReset() {
   }
 
   return (
-    <main dir="rtl" className="min-h-screen bg-gray-50 grid place-items-center p-5">
-      <section className="w-full max-w-md bg-white border border-gray-200 p-7 text-right shadow-sm">
-        <Mail className="text-teal-700" aria-hidden="true" />
-        <h1 className="mt-4 text-2xl font-bold text-gray-950">استعادة كلمة المرور</h1>
+    <main dir="rtl" className="grid min-h-screen place-items-center bg-canvas p-5">
+      <section className="w-full max-w-md rounded-lg border border-border-subtle bg-surface p-7 text-right shadow-float">
+        <span className="grid size-11 place-items-center rounded-full bg-brand-subtle text-brand-300"><Mail className="size-5" aria-hidden="true" /></span>
+        <h1 className="mt-4 text-h1 font-extrabold text-text-primary">استعادة كلمة المرور</h1>
         {submitted ? (
-          <p role="status" className="mt-4 leading-7 text-gray-600">
+          <p role="status" className="mt-4 leading-7 text-body text-text-secondary">
             إذا كان الحساب موجوداً فستصل تعليمات الاستعادة إلى البريد المسجل.
           </p>
         ) : (
           <form className="mt-6 space-y-5" onSubmit={submit}>
-            <label className="block text-sm font-semibold text-gray-800" htmlFor="reset-email">البريد الإلكتروني</label>
-            <input id="reset-email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} className="w-full border border-gray-300 px-4 py-3 outline-none focus:ring-2 focus:ring-teal-600" />
-            <button disabled={busy} className="w-full bg-teal-700 px-4 py-3 font-bold text-white disabled:opacity-60">{busy ? 'جارٍ الإرسال...' : 'إرسال التعليمات'}</button>
+            <label className="block text-label font-semibold text-text-secondary" htmlFor="reset-email">البريد الإلكتروني</label>
+            <input id="reset-email" type="email" dir="ltr" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} className="w-full rounded-md border border-border-strong bg-canvas px-4 py-3 text-left text-body text-text-primary placeholder:text-text-tertiary transition-colors focus:border-brand-400" />
+            <button disabled={busy} className="w-full cursor-pointer rounded-md bg-brand-500 px-4 py-3 font-bold text-text-primary transition-all hover:bg-brand-400 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60">{busy ? 'جارٍ الإرسال...' : 'إرسال التعليمات'}</button>
           </form>
         )}
-        <Link to="/login" className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-teal-800"><ArrowRight size={17} aria-hidden="true" /> العودة لتسجيل الدخول</Link>
+        <Link to="/login" className="mt-6 inline-flex items-center gap-2 text-label font-semibold text-brand-300 hover:text-brand-400"><ArrowRight size={17} aria-hidden="true" /> العودة لتسجيل الدخول</Link>
       </section>
     </main>
   )

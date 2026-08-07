@@ -8,7 +8,7 @@ export function ProtectedRoute() {
   const location = useLocation()
 
   if (auth.status === 'loading') {
-    return <main aria-busy="true" className="min-h-screen bg-gray-50 p-8" />
+    return <main aria-busy="true" className="min-h-screen bg-canvas p-8" />
   }
   if (auth.status === 'anonymous') {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />
@@ -18,13 +18,13 @@ export function ProtectedRoute() {
   }
   if (auth.status !== 'active') {
     return (
-      <main dir="rtl" className="min-h-screen bg-gray-50 grid place-items-center p-6">
-        <section className="w-full max-w-md bg-white border border-gray-200 p-6 text-right shadow-sm">
-          <h1 className="text-xl font-bold text-gray-900">تعذر فتح مساحة العمل</h1>
-          <p className="mt-3 text-sm leading-7 text-gray-600">
+      <main dir="rtl" className="grid min-h-screen place-items-center bg-canvas p-6">
+        <section className="w-full max-w-md rounded-lg border border-border-subtle bg-surface p-6 text-right shadow-float">
+          <h1 className="text-h1 font-extrabold text-text-primary">تعذر فتح مساحة العمل</h1>
+          <p className="mt-3 text-body leading-7 text-text-secondary">
             الحساب غير نشط أو لا يملك عضوية مؤسسة فعالة. تواصل مع مسؤول المؤسسة.
           </p>
-          <button type="button" onClick={auth.logout} className="mt-6 inline-flex items-center gap-2 text-red-700">
+          <button type="button" onClick={auth.logout} className="mt-6 inline-flex cursor-pointer items-center gap-2 text-body font-bold text-danger transition-colors hover:text-danger/80">
             <LogOut aria-hidden="true" size={18} /> تسجيل الخروج
           </button>
         </section>
