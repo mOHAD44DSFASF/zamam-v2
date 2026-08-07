@@ -1,4 +1,4 @@
-export type AuthStatus = 'loading' | 'anonymous' | 'active' | 'inactive' | 'error'
+export type AuthStatus = 'loading' | 'anonymous' | 'active' | 'must_change_password' | 'inactive' | 'error'
 
 export interface ActiveMembershipView {
   organizationId: string
@@ -11,6 +11,7 @@ export interface SessionView {
   email: string | null
   accountStatus: 'active' | 'disabled' | 'archived'
   memberships: readonly ActiveMembershipView[]
+  mustChangePassword: boolean
 }
 
 export interface AuthState {

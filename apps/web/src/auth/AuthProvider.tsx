@@ -15,6 +15,7 @@ async function resolveUser(user: User | null): Promise<AuthState> {
   if (!session.memberships.some(({ status }) => status === 'active')) {
     return { status: 'inactive', session, reason: 'NO_ACTIVE_MEMBERSHIP' }
   }
+  if (session.mustChangePassword) return { status: 'must_change_password', session }
   return { status: 'active', session }
 }
 

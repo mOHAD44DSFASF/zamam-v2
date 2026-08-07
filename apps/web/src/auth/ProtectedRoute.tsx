@@ -1,6 +1,7 @@
 import { LogOut } from 'lucide-react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from './auth-context'
+import { ForcePasswordChangeScreen } from './ForcePasswordChangeScreen'
 
 export function ProtectedRoute() {
   const auth = useAuth()
@@ -11,6 +12,9 @@ export function ProtectedRoute() {
   }
   if (auth.status === 'anonymous') {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />
+  }
+  if (auth.status === 'must_change_password') {
+    return <ForcePasswordChangeScreen />
   }
   if (auth.status !== 'active') {
     return (

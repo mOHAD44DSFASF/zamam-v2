@@ -7,6 +7,7 @@ interface SessionViewDocument {
   email?: unknown
   accountStatus?: unknown
   memberships?: unknown
+  mustChangePassword?: unknown
 }
 
 export async function readSessionView(userId: string): Promise<SessionView | null> {
@@ -41,5 +42,9 @@ export async function readSessionView(userId: string): Promise<SessionView | nul
     email: typeof data.email === 'string' ? data.email : null,
     accountStatus,
     memberships,
+    // Absent on every sessionViews doc written before this field existed (e.g. owner@zamam.local, bootstrap
+    // accounts, anyone accepted via the invite-link flow) — default false so pre-existing accounts are
+    // never force-gated by a field they never opted into.
+    mustChangePassword: data.mustChangePassword === true,
   }
 }
