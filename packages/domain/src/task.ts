@@ -42,6 +42,7 @@ export interface TaskStepInput {
   assigneeUserId?: string
   assigneeDepartmentId?: string
   driveLink?: string
+  dueAt?: string
 }
 
 export const MAX_TASK_STEPS = 20
@@ -69,6 +70,7 @@ export function assertStepsInput(steps: readonly TaskStepInput[]) {
   for (const step of steps) {
     normalizeStepName(step.name)
     assertDriveLink(step.driveLink)
+    assertTaskDueAt(step.dueAt)
     const hasPerson = Boolean(step.assigneeUserId)
     const hasDepartment = Boolean(step.assigneeDepartmentId)
     if (step.assigneeType === 'person' && (!hasPerson || hasDepartment)) throw new Error('STEP_ASSIGNEE_INVALID')
@@ -98,5 +100,27 @@ export function normalizeSendBackReason(value: string) {
   const normalized = value.trim()
   if (normalized.length < 3 || normalized.length > 1_000) throw new Error('SEND_BACK_REASON_REQUIRED')
   return normalized
+}
+
+/** No due date set on the owner's original ask, this is the fallback: a step sitting "in_progress" for
+ * longer than this many days (measured from when it BECAME the current step, not the task's last edit)
+ * counts as stalled. A starting default the owner can ask to change later. */
+export const STALLED_STEP_DEFAULT_THRESHOLD_DAYS = 3
+
+export interface StalledCheckInput {
+  status: TaskStatus
+  currentStepDueAt?: string | null
+  currentStepEnteredAt?: string | null
+}
+
+/** Server-side (query-time) derivation — never client-only — so every dashboard that surfaces "stalled"
+ * tasks agrees: in_progress, and either past its current step's own due date, or (no due date set) sitting
+ * in that step past the default threshold since it became current. Terminal/blocked/not-yet-started tasks
+ * are never stalled. */
+export function isTaskStalled(task: StalledCheckInput, now: number, thresholdDays = STALLED_STEP_DEFAULT_THRESHOLD_DAYS) {
+  if (task.status !== 'in_progress') return false
+  if (task.currentStepDueAt) return now > Date.parse(task.currentStepDueAt)
+  if (!task.currentStepEnteredAt) return false
+  return now - Date.parse(task.currentStepEnteredAt) > thresholdDays * 86_400_000
 }
 

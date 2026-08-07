@@ -12,6 +12,15 @@ export function normalizeEmail(value: string) {
   return normalized
 }
 
+/** E.164-ish: optional leading +, then 8-15 digits, country code included (no local-format guessing) — the
+ * exact shape wa.me links require (see domain/whatsapp.ts buildWhatsappLink). */
+export function normalizeWhatsappPhone(value: string) {
+  const trimmed = value.trim().replace(/[\s()-]/g, '')
+  const normalized = trimmed.startsWith('+') ? trimmed : `+${trimmed}`
+  if (!/^\+[1-9]\d{7,14}$/.test(normalized)) throw new Error('INVALID_WHATSAPP_PHONE')
+  return normalized
+}
+
 export function assertDateOnly(value: string, code = 'INVALID_DATE') {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error(code)
   const parsed = new Date(`${value}T00:00:00.000Z`)

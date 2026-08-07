@@ -49,7 +49,11 @@ export function createDefaultRoles(organizationId: string, policyVersion = 1): R
     // vs. a narrower, view-scoped set — the org-wide-vs-own-department distinction the product asked for is
     // NOT a permission-set difference, it's an assignment-SCOPE difference: assign Manager at organization
     // scope (any department), assign DepartmentLead at department scope (their department only).
-    Manager: role('Manager', departmentManager),
+    // Manager additionally gets 'user.invite' (direct member creation, Area 1 of the dashboard/member
+    // rollout) — deliberately added only here, not to the shared departmentManager set, so DepartmentManager
+    // and DepartmentLead are untouched; only Owner/GeneralManager (via the full `owner` set) and Manager can
+    // create members.
+    Manager: role('Manager', unique(departmentManager, ['user.invite'])),
     DepartmentLead: role('DepartmentLead', departmentLead),
     TeamLeader: role('TeamLeader', unique(basic, selfService, taskExecutor, teamOperations)),
     Supervisor: role('Supervisor', unique(basic, selfService, taskExecutor, ['task.view_all', 'task.assign', 'review.perform', 'project.view', 'workspace.view'])),
