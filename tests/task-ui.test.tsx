@@ -131,8 +131,10 @@ describe('task management UI', () => {
     fireEvent.click(screen.getByRole('button', { name: 'إضافة خطوة' }))
     const stepTwoName = screen.getAllByLabelText('اسم الخطوة')[1]!
     fireEvent.change(stepTwoName, { target: { value: 'مراجعة القسم' } })
-    const stepTwoType = screen.getAllByLabelText('نوع المُسند إليه')[1]!
-    fireEvent.change(stepTwoType, { target: { value: 'department' } })
+    // Assignee-type is a segmented button toggle (شخص/قسم), not a <select> — click "قسم" within the
+    // second step's own group (each step renders its own role="group" aria-label="نوع المُسند إليه").
+    const stepTwoTypeGroup = screen.getAllByRole('group', { name: 'نوع المُسند إليه' })[1]!
+    fireEvent.click(within(stepTwoTypeGroup).getByRole('button', { name: 'قسم' }))
     const stepTwoDepartment = screen.getAllByLabelText('القسم')[0]!
     fireEvent.change(stepTwoDepartment, { target: { value: 'dep-1' } })
     fireEvent.click(screen.getByRole('button', { name: 'حفظ' }))
