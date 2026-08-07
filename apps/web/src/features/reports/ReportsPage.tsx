@@ -1,14 +1,97 @@
-import { Download, LoaderCircle } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { AlertTriangle, Download, LoaderCircle, RefreshCw } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTenant } from '../../tenant/tenant-context'
 import { reportClient, type ReportClient, type ReportSnapshot } from './client'
-const t = { title: '\u0627\u0644\u062a\u0642\u0627\u0631\u064a\u0631 \u0648\u0645\u0624\u0634\u0631\u0627\u062a \u0627\u0644\u0623\u062f\u0627\u0621', loading: '\u062c\u0627\u0631\u064d \u0627\u0644\u062a\u062d\u0645\u064a\u0644...', error: '\u062a\u0639\u0630\u0631 \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u062a\u0642\u0627\u0631\u064a\u0631', noData: '\u0644\u0627 \u062a\u0648\u062c\u062f \u0628\u064a\u0627\u0646\u0627\u062a \u0643\u0627\u0641\u064a\u0629', export: '\u0637\u0644\u0628 \u062a\u0635\u062f\u064a\u0631 CSV', lineage: '\u0646\u0633\u062e\u0629 \u0627\u0644\u0645\u0624\u0634\u0631', noTenant: '\u0644\u0627 \u062a\u0648\u062c\u062f \u0639\u0636\u0648\u064a\u0629 \u0646\u0634\u0637\u0629.' }
-export function ReportsScreen({ organizationId, client, periodStart }: { organizationId: string; client: ReportClient; periodStart: string }) {
-  const [snapshot, setSnapshot] = useState<ReportSnapshot | null>(null); const [status, setStatus] = useState<'loading'|'ready'|'error'>('loading'); const [selected, setSelected] = useState<string[]>([])
-  useEffect(() => { let active = true; client.load(organizationId, periodStart).then((value) => { if (active) { setSnapshot(value); setSelected(value.allowedExportFields.map(({ key }) => key)); setStatus('ready') } }, () => { if (active) setStatus('error') }); return () => { active = false } }, [client, organizationId, periodStart])
-  if (status === 'loading') return <main dir="rtl" className="grid min-h-screen place-items-center"><p role="status"><LoaderCircle className="inline size-5 animate-spin" aria-hidden="true" /> {t.loading}</p></main>
-  if (status === 'error' || !snapshot) return <main dir="rtl"><h1>{t.error}</h1></main>
-  const metrics = snapshot.metrics.filter((metric) => metric.visibility === 'operational' || snapshot.capabilities.viewPerformance)
-  return <main dir="rtl" className="min-h-screen bg-gray-50"><header className="border-b bg-white"><div className="mx-auto max-w-6xl px-5 py-6"><h1 className="text-2xl font-black">{t.title}</h1><p className="mt-1 text-sm text-gray-600">{snapshot.periodStart} - {snapshot.periodEnd}</p></div></header><div className="mx-auto max-w-6xl px-5 py-6"><section aria-label={t.title} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{metrics.map((metric) => <article key={metric.id} className="border bg-white p-4"><h2 className="text-sm font-bold">{metric.name}</h2><p className="mt-3 text-2xl font-black">{metric.value === null ? t.noData : `${metric.value}${metric.unit === 'percent' ? '%' : ' min'}`}</p><p className="mt-2 text-xs text-gray-500">{t.lineage}: v{metric.definitionVersion} · {metric.cutoffAt}</p></article>)}</section>{snapshot.capabilities.export && <section className="mt-6 border bg-white p-5" aria-labelledby="export-heading"><h2 id="export-heading" className="font-black">{t.export}</h2><div className="mt-3 flex flex-wrap gap-3">{snapshot.allowedExportFields.map((field) => <label key={field.key} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={selected.includes(field.key)} onChange={(event) => setSelected(event.target.checked ? [...selected, field.key] : selected.filter((key) => key !== field.key))} />{field.label}</label>)}</div><button disabled={!selected.length} onClick={() => void client.requestExport(organizationId, { id: crypto.randomUUID(), reportType: 'operations', scopeType: 'organization', scopeId: organizationId, format: 'csv', requestedFields: selected })} className="mt-4 inline-flex items-center gap-2 rounded-md bg-teal-800 px-4 py-2 font-bold text-white disabled:opacity-50"><Download className="size-4" aria-hidden="true" />{t.export}</button></section>}</div></main>
+
+const t = {
+  eyebrow: 'الأداء',
+  title: 'التقارير ومؤشرات الأداء',
+  loading: 'جارٍ التحميل...',
+  error: 'تعذر تحميل التقارير',
+  retry: 'إعادة المحاولة',
+  noData: 'لا توجد بيانات كافية',
+  export: 'طلب تصدير CSV',
+  lineage: 'نسخة المؤشر',
+  noTenant: 'لا توجد عضوية مؤسسة نشطة.',
 }
-export function ReportsPage() { const { organizationId } = useTenant(); if (!organizationId) return <main dir="rtl">{t.noTenant}</main>; const date = new Date(); date.setUTCDate(1); return <ReportsScreen organizationId={organizationId} client={reportClient} periodStart={date.toISOString().slice(0,10)} /> }
+
+export function ReportsScreen({ organizationId, client, periodStart }: { organizationId: string; client: ReportClient; periodStart: string }) {
+  const [snapshot, setSnapshot] = useState<ReportSnapshot | null>(null)
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [selected, setSelected] = useState<string[]>([])
+  const [exporting, setExporting] = useState(false)
+  const load = useCallback(async () => {
+    setStatus('loading')
+    try {
+      const value = await client.load(organizationId, periodStart)
+      setSnapshot(value)
+      setSelected(value.allowedExportFields.map(({ key }) => key))
+      setStatus('ready')
+    } catch {
+      setStatus('error')
+    }
+  }, [client, organizationId, periodStart])
+  useEffect(() => {
+    let active = true
+    client.load(organizationId, periodStart).then(
+      (value) => { if (active) { setSnapshot(value); setSelected(value.allowedExportFields.map(({ key }) => key)); setStatus('ready') } },
+      () => { if (active) setStatus('error') },
+    )
+    return () => { active = false }
+  }, [client, organizationId, periodStart])
+  if (status === 'loading') return <main dir="rtl" className="min-h-screen bg-canvas">
+    <p role="status" className="sr-only">{t.loading}</p>
+    <div className="animate-pulse" aria-hidden="true">
+      <header className="border-b border-border-subtle bg-surface"><div className="mx-auto max-w-6xl px-5 py-6"><div className="h-4 w-16 rounded-sm bg-surface-hover" /><div className="mt-2 h-8 w-40 rounded-md bg-surface-hover" /><div className="mt-1 h-4 w-32 rounded-sm bg-surface-hover" /></div></header>
+      <div className="mx-auto max-w-6xl px-5 py-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{Array.from({ length: 4 }).map((_, index) => <div key={index} className="h-24 rounded-md border border-border-subtle bg-surface" />)}</div>
+        <div className="mt-6 h-64 rounded-md border border-border-subtle bg-surface" />
+      </div>
+    </div>
+  </main>
+  if (status === 'error' || !snapshot) return <main dir="rtl" className="grid min-h-screen place-items-center"><section className="text-center"><AlertTriangle className="mx-auto size-7 text-warning" aria-hidden="true" /><h1 className="mt-3 text-h1 font-extrabold text-text-primary">{t.error}</h1><button type="button" onClick={() => void load()} className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-md border border-border-strong px-4 py-2 font-bold text-text-primary transition-all hover:bg-surface-hover active:scale-[0.98]"><RefreshCw className="size-4" aria-hidden="true" /> {t.retry}</button></section></main>
+  const metrics = snapshot.metrics.filter((metric) => metric.visibility === 'operational' || snapshot.capabilities.viewPerformance)
+  return <main dir="rtl" className="min-h-screen bg-canvas">
+    <header className="border-b border-border-subtle bg-surface"><div className="mx-auto max-w-6xl px-5 py-6"><p className="text-label font-semibold text-brand-300">{t.eyebrow}</p><h1 className="text-display font-extrabold text-text-primary">{t.title}</h1><p className="mt-1 text-body text-text-secondary">{snapshot.periodStart} - {snapshot.periodEnd}</p></div></header>
+    <div className="mx-auto max-w-6xl px-5 py-6">
+      <section aria-label={t.title} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {metrics.map((metric) => <article key={metric.id} className="rounded-md border border-border-subtle bg-surface p-4">
+          <h2 className="text-label font-semibold text-text-secondary">{metric.name}</h2>
+          {metric.value === null
+            ? <p className="mt-3 text-h3 font-bold text-text-tertiary">{t.noData}</p>
+            : <p className="mt-3 text-display font-extrabold text-text-primary">{metric.value}{metric.unit === 'percent' ? '%' : ' min'}</p>}
+          <p className="mt-2 text-caption text-text-tertiary">{t.lineage}: v{metric.definitionVersion} · {metric.cutoffAt}</p>
+        </article>)}
+      </section>
+      {snapshot.capabilities.export && <section className="mt-6 rounded-md border border-border-subtle bg-surface p-5" aria-labelledby="export-heading">
+        <h2 id="export-heading" className="text-h2 font-bold text-text-primary">{t.export}</h2>
+        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
+          {snapshot.allowedExportFields.map((field) => <label key={field.key} className="flex cursor-pointer items-center gap-2 text-body text-text-secondary transition-colors hover:text-text-primary">
+            <input type="checkbox" checked={selected.includes(field.key)} onChange={(event) => setSelected(event.target.checked ? [...selected, field.key] : selected.filter((key) => key !== field.key))} className="size-4 rounded-sm border-border-strong accent-brand-500" />
+            {field.label}
+          </label>)}
+        </div>
+        <button
+          type="button"
+          disabled={!selected.length || exporting}
+          onClick={() => {
+            setExporting(true)
+            void client.requestExport(organizationId, { id: crypto.randomUUID(), reportType: 'operations', scopeType: 'organization', scopeId: organizationId, format: 'csv', requestedFields: selected }).finally(() => setExporting(false))
+          }}
+          className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-md bg-brand-500 px-4 py-2 text-body font-bold text-text-primary transition-all hover:bg-brand-400 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {exporting ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : <Download className="size-4" aria-hidden="true" />}
+          {t.export}
+        </button>
+      </section>}
+    </div>
+  </main>
+}
+
+export function ReportsPage() {
+  const { organizationId } = useTenant()
+  if (!organizationId) return <main dir="rtl" className="grid min-h-screen place-items-center text-text-secondary">{t.noTenant}</main>
+  const date = new Date()
+  date.setUTCDate(1)
+  return <ReportsScreen organizationId={organizationId} client={reportClient} periodStart={date.toISOString().slice(0, 10)} />
+}
