@@ -7,6 +7,7 @@ import {
   normalizeDirectoryName,
   normalizeEmail,
   normalizeEmployeeNumber,
+  normalizeWhatsappPhone,
   type TenantEntityKind,
 } from '@zamam/domain'
 import {
@@ -51,6 +52,35 @@ const roleAssignmentScope = (role: z.infer<typeof inviteRoleSchema>, organizatio
     : role === 'Manager'
       ? { scopeType: 'organization' as const, scopeId: organizationId }
       : { scopeType: 'self' as const, scopeId: userId }
+
+/** Direct member creation (Area 1): the creator supplies everything, the caller sees a strong temporary
+ * password exactly once, and the new member is active immediately — no invitation/token/pending-acceptance
+ * step. Same shape as inviteSchema plus the required whatsappPhone this rollout needs (see
+ * domain/whatsapp.ts) since this account can never go through the profile-completion prompt shown to
+ * pre-existing accounts. */
+const createMemberSchema = z.object({
+  email: z.string().min(3).max(254),
+  displayName: z.string().min(2).max(160),
+  firstName: z.string().min(2).max(80),
+  employeeNumber: z.string().min(2).max(32),
+  employmentType: z.enum(['employee', 'contractor']),
+  primaryDepartmentId: idSchema,
+  jobTitle: z.string().min(2).max(120),
+  managerUserId: idSchema.optional(),
+  startDate: z.string(),
+  locale: z.enum(['ar', 'en']).default('ar'),
+  timezone: z.string().min(1).max(64),
+  role: inviteRoleSchema.default('Employee'),
+  whatsappPhone: z.string().min(6).max(20),
+}).strict()
+
+const changePasswordSchema = z.object({
+  newPassword: z.string().min(12).max(128),
+}).strict()
+
+const whatsappPhoneSchema = z.object({
+  whatsappPhone: z.string().min(6).max(20),
+}).strict()
 
 const acceptInvitationSchema = z.object({
   invitationToken: z.string().regex(/^[A-Za-z0-9_-]{32,512}$/),
@@ -293,6 +323,178 @@ export class EmployeeService {
       if (identity.created) await this.identities.compensateInvitation(identity.userId, metadata.idempotencyKey)
       throw error
     }
+  }
+
+  /**
+   * Direct member creation (Area 1) — Owner/Manager only (enforced by 'user.invite' not being in
+   * DepartmentLead's permission set, see default-roles.ts departmentLead). Mirrors invite()'s
+   * record-creation shape exactly (same collections, same fields) but skips the invitation/token/
+   * pending-acceptance step entirely: the identity gets its password set immediately, membership and
+   * employment go straight to 'active', and sessionViews is projected right away so the new member can log
+   * in the moment this call returns. The temporary password is returned once, in plaintext, for the
+   * creator to copy and deliver — never stored, never logged again after this.
+   */
+  async createDirect(metadata: EmployeeCommandMetadata, rawInput: z.input<typeof createMemberSchema>) {
+    const parsed = createMemberSchema.parse(rawInput)
+    const input = {
+      ...parsed,
+      email: normalizeEmail(parsed.email),
+      displayName: normalizeDirectoryName(parsed.displayName),
+      firstName: normalizeDirectoryName(parsed.firstName),
+      employeeNumber: normalizeEmployeeNumber(parsed.employeeNumber),
+      jobTitle: normalizeDirectoryName(parsed.jobTitle),
+      startDate: assertDateOnly(parsed.startDate, 'INVALID_START_DATE'),
+      whatsappPhone: normalizeWhatsappPhone(parsed.whatsappPhone),
+    }
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: input.timezone }).format()
+    } catch {
+      throw new Error('INVALID_TIMEZONE')
+    }
+    const context = await this.authorized(metadata, 'user.invite')
+    const identity = await this.identities.provisionInvitation({
+      email: input.email,
+      displayName: input.displayName,
+      organizationId: metadata.organizationId,
+      idempotencyKey: metadata.idempotencyKey,
+    })
+    idSchema.parse(identity.userId)
+    const temporaryPassword = randomBytes(18).toString('base64url')
+    const emailHash = createHash('sha256').update(input.email).digest('hex')
+    const roleAssignmentId = `role-${identity.userId}`
+    const roleId = defaultRoleDocId(input.role as DefaultRoleName)
+    const rolePath = tenantDocumentPath(metadata.organizationId, 'role', roleId)
+    try {
+      await this.identities.setPassword(identity.userId, temporaryPassword)
+      return await this.audit.execute(context, async (transaction) => {
+        const department = await readOwned(
+          transaction,
+          tenantDocumentPath(metadata.organizationId, 'department', input.primaryDepartmentId),
+          metadata.organizationId,
+        )
+        if (department.status !== 'active') throw new Error('DEPARTMENT_NOT_ACTIVE')
+        const role = await readOwned(transaction, rolePath, metadata.organizationId)
+        if (role.status !== 'active') throw new Error('ROLE_NOT_ACTIVE')
+        const emailIndexPath = systemPath(metadata.organizationId, '_memberEmailHashes', stableId('email', emailHash))
+        if ((await transaction.get(emailIndexPath))?.active === true) throw new Error('EMAIL_ALREADY_MEMBER')
+        const employeeIndexPath = systemPath(metadata.organizationId, '_employeeNumbers', stableId('employee', input.employeeNumber))
+        if ((await transaction.get(employeeIndexPath))?.active === true) throw new Error('EMPLOYEE_NUMBER_ALREADY_EXISTS')
+        const membershipPath = tenantDocumentPath(metadata.organizationId, 'organization_membership', identity.userId)
+        if ((await transaction.get(membershipPath))?.status !== undefined) throw new Error('MEMBERSHIP_ALREADY_EXISTS')
+        const existingSessionView = await transaction.get(sessionViewPath(identity.userId))
+        transaction.create(membershipPath, {
+          ...baseRecord(metadata.organizationId), userId: identity.userId, status: 'active', joinedAt: SERVER_TIMESTAMP,
+        })
+        transaction.create(tenantDocumentPath(metadata.organizationId, 'user_profile', identity.userId), {
+          ...baseRecord(metadata.organizationId),
+          userId: identity.userId,
+          displayName: input.displayName,
+          firstName: input.firstName,
+          locale: input.locale,
+          timezone: input.timezone,
+          whatsappPhone: input.whatsappPhone,
+        })
+        transaction.create(tenantDocumentPath(metadata.organizationId, 'employment_profile', identity.userId), {
+          ...baseRecord(metadata.organizationId),
+          userId: identity.userId,
+          employeeNumber: input.employeeNumber,
+          employmentType: input.employmentType,
+          primaryDepartmentId: input.primaryDepartmentId,
+          jobTitle: input.jobTitle,
+          ...(input.managerUserId ? { managerUserId: input.managerUserId } : {}),
+          status: 'active',
+          startDate: input.startDate,
+          mustChangePassword: true,
+        })
+        transaction.create(emailIndexPath, { ...baseRecord(metadata.organizationId), active: true, userId: identity.userId })
+        transaction.create(employeeIndexPath, { ...baseRecord(metadata.organizationId), active: true, userId: identity.userId })
+        transaction.create(systemPath(metadata.organizationId, '_userAccessState', identity.userId), {
+          ...baseRecord(metadata.organizationId), state: 'active', userId: identity.userId,
+        })
+        const scope = roleAssignmentScope(input.role, metadata.organizationId, identity.userId, input.primaryDepartmentId)
+        transaction.create(tenantDocumentPath(metadata.organizationId, 'role_assignment', roleAssignmentId), {
+          ...baseRecord(metadata.organizationId), userId: identity.userId, roleId,
+          scopeType: scope.scopeType, scopeId: scope.scopeId, effect: 'grant', status: 'active',
+        })
+        projectMembershipActive(transaction, existingSessionView, {
+          userId: identity.userId, organizationId: metadata.organizationId, displayName: input.displayName,
+          email: input.email, mustChangePassword: true,
+        })
+        return {
+          result: { userId: identity.userId, temporaryPassword, membershipStatus: 'active' as const },
+          resourceType: 'organization_membership',
+          resourceId: identity.userId,
+          outbox: {
+            type: 'user.activated',
+            version: 1,
+            payload: { userId: identity.userId, organizationId: metadata.organizationId },
+          },
+        }
+      })
+    } catch (error) {
+      if (identity.created) await this.identities.compensateInvitation(identity.userId, metadata.idempotencyKey)
+      throw error
+    }
+  }
+
+  /**
+   * Self-service, authenticated-by-session (not by a specific permission — every active member must be
+   * able to change their own password, so there is deliberately no this.authorized() gate here, same as
+   * acceptInvitation()'s pre-auth counterpart just below). Clears mustChangePassword so ProtectedRoute's
+   * force-gate (see apps/web/src/auth/ProtectedRoute.tsx) lets the user through on their next session read.
+   */
+  async changeOwnPassword(metadata: EmployeeCommandMetadata, rawInput: z.input<typeof changePasswordSchema>) {
+    const input = changePasswordSchema.parse(rawInput)
+    const userId = metadata.principal.userId
+    await this.identities.setPassword(userId, input.newPassword)
+    const context = {
+      organizationId: metadata.organizationId, actorUserId: userId, permission: 'user.update' as const,
+      correlationId: metadata.correlationId, idempotencyKey: metadata.idempotencyKey, fingerprint: metadata.fingerprint,
+    }
+    return this.audit.execute(context, async (transaction) => {
+      const employmentPath = tenantDocumentPath(metadata.organizationId, 'employment_profile', userId)
+      const employment = await readOwned(transaction, employmentPath, metadata.organizationId)
+      const existingSessionView = await transaction.get(sessionViewPath(userId))
+      transaction.update(employmentPath, {
+        mustChangePassword: false, version: numeric(employment.version) + 1, updatedAt: SERVER_TIMESTAMP,
+      })
+      if (existingSessionView) {
+        projectMembershipActive(transaction, existingSessionView, {
+          userId, organizationId: metadata.organizationId,
+          displayName: String(existingSessionView.displayName ?? ''), mustChangePassword: false,
+        })
+      }
+      return {
+        result: { userId, mustChangePassword: false },
+        resourceType: 'employment_profile',
+        resourceId: userId,
+        outbox: { type: 'user.password_changed', version: 1, payload: { userId } },
+      }
+    })
+  }
+
+  /** Self-service profile field — any active member may set/update their own WhatsApp number (Area 5's
+   * reminder links read it back). No RBAC gate for the same reason as changeOwnPassword(): this only ever
+   * touches the caller's own record. */
+  async updateOwnWhatsappPhone(metadata: EmployeeCommandMetadata, rawInput: z.input<typeof whatsappPhoneSchema>) {
+    const input = whatsappPhoneSchema.parse(rawInput)
+    const phone = normalizeWhatsappPhone(input.whatsappPhone)
+    const userId = metadata.principal.userId
+    const context = {
+      organizationId: metadata.organizationId, actorUserId: userId, permission: 'user.update' as const,
+      correlationId: metadata.correlationId, idempotencyKey: metadata.idempotencyKey, fingerprint: metadata.fingerprint,
+    }
+    return this.audit.execute(context, async (transaction) => {
+      const path = tenantDocumentPath(metadata.organizationId, 'user_profile', userId)
+      const profile = await readOwned(transaction, path, metadata.organizationId)
+      transaction.update(path, { whatsappPhone: phone, version: numeric(profile.version) + 1, updatedAt: SERVER_TIMESTAMP })
+      return {
+        result: { userId, whatsappPhone: phone },
+        resourceType: 'user_profile',
+        resourceId: userId,
+        outbox: { type: 'user.profile_updated', version: 1, payload: { userId } },
+      }
+    })
   }
 
   /**

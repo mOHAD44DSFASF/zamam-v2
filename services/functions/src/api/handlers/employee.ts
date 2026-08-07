@@ -83,11 +83,13 @@ export function createEmployeeHandlers(deps: Deps): HandlerRegistry {
         return {
           userId: doc.id, membershipStatus: doc.data().status,
           displayName: profile ? String(profile.displayName) : null,
+          whatsappPhone: profile && typeof profile.whatsappPhone === 'string' ? profile.whatsappPhone : null,
           employeeNumber: employment ? String(employment.employeeNumber ?? '') : '',
           jobTitle: employment ? String(employment.jobTitle) : null,
           employmentType: employment && employment.employmentType === 'contractor' ? 'contractor' as const : 'employee' as const,
           primaryDepartmentId: employment && typeof employment.primaryDepartmentId === 'string' ? employment.primaryDepartmentId : '',
           employmentStatus: employment ? String(employment.status) : null,
+          mustChangePassword: employment?.mustChangePassword === true,
         }
       }))
       // Active departments — both to resolve row names and to populate the invite form's department picker.
@@ -112,6 +114,23 @@ export function createEmployeeHandlers(deps: Deps): HandlerRegistry {
       ...(typeof input.managerUserId === 'string' ? { managerUserId: input.managerUserId } : {}),
       ...(typeof input.locale === 'string' ? { locale: input.locale as 'ar' | 'en' } : {}),
       ...(typeof input.role === 'string' ? { role: input.role as 'Employee' | 'DepartmentLead' | 'Manager' } : {}),
+    }),
+    '/v1/employees/create': (context, input) => service.createDirect(metadata(context), {
+      email: requireString(input, 'email'), displayName: requireString(input, 'displayName'),
+      firstName: requireString(input, 'firstName'), employeeNumber: requireString(input, 'employeeNumber'),
+      employmentType: requireString(input, 'employmentType') as 'employee' | 'contractor',
+      primaryDepartmentId: requireString(input, 'primaryDepartmentId'), jobTitle: requireString(input, 'jobTitle'),
+      startDate: requireString(input, 'startDate'), timezone: requireString(input, 'timezone'),
+      whatsappPhone: requireString(input, 'whatsappPhone'),
+      ...(typeof input.managerUserId === 'string' ? { managerUserId: input.managerUserId } : {}),
+      ...(typeof input.locale === 'string' ? { locale: input.locale as 'ar' | 'en' } : {}),
+      ...(typeof input.role === 'string' ? { role: input.role as 'Employee' | 'DepartmentLead' | 'Manager' } : {}),
+    }),
+    '/v1/employees/change-password': (context, input) => service.changeOwnPassword(metadata(context), {
+      newPassword: requireString(input, 'newPassword'),
+    }),
+    '/v1/employees/whatsapp/update': (context, input) => service.updateOwnWhatsappPhone(metadata(context), {
+      whatsappPhone: requireString(input, 'whatsappPhone'),
     }),
     '/v1/employees/disable': (context, input) => service.disable(
       metadata(context), requireString(input, 'userId'), requireNumber(input, 'expectedMembershipVersion'), requireString(input, 'reason'),

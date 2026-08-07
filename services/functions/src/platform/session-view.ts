@@ -32,25 +32,31 @@ function activeMemberships(document: StoredDocument | null): MembershipEntry[] {
 /**
  * Adds/refreshes this organization's active-membership entry, preserving whatever other organizations'
  * entries already exist (a user can belong to more than one). Only sets displayName/accountStatus when
- * creating the doc for the first time — an update never overwrites them, since callers here (invitation
- * acceptance, admin activation) don't have the user's plaintext email on hand to safely round-trip it.
+ * creating the doc for the first time — an update never overwrites them, since most callers here
+ * (invitation acceptance, admin activation) don't have the user's plaintext email on hand to safely
+ * round-trip it; `email`/`mustChangePassword` are optional precisely because only some callers (direct
+ * member creation, its own password-change command) have that data or need to touch it.
  */
 export function projectMembershipActive(
   transaction: AtomicTransaction,
   existing: StoredDocument | null,
-  input: { userId: string; organizationId: string; displayName: string },
+  input: { userId: string; organizationId: string; displayName: string; email?: string; mustChangePassword?: boolean },
 ) {
   const path = sessionViewPath(input.userId)
   const memberships = [
     ...activeMemberships(existing).filter((entry) => entry.organizationId !== input.organizationId),
     { organizationId: input.organizationId, status: 'active' as const },
   ]
+  const optional = {
+    ...(input.email !== undefined ? { email: input.email } : {}),
+    ...(input.mustChangePassword !== undefined ? { mustChangePassword: input.mustChangePassword } : {}),
+  }
   if (existing) {
-    transaction.update(path, { displayName: input.displayName, memberships })
+    transaction.update(path, { displayName: input.displayName, memberships, ...optional })
     return
   }
   transaction.create(path, {
-    userId: input.userId, displayName: input.displayName, accountStatus: 'active', memberships,
+    userId: input.userId, displayName: input.displayName, accountStatus: 'active', memberships, ...optional,
   })
 }
 
