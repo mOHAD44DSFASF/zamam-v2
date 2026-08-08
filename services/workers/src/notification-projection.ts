@@ -38,10 +38,21 @@ const resourceIdKeys: Readonly<Record<string, string>> = {
   task: 'taskId', review_request: 'reviewRequestId', approval: 'approvalId',
   comment: 'commentId', attachment: 'fileId', leave_request: 'leaveRequestId', user: 'userId',
 }
+const idPattern = /^[A-Za-z0-9_-]{2,128}$/
 const eventResource = (event: OutboxEvent, resourceType?: string) => {
   if (!resourceType) return null
-  const value = payloadRecord(event)[resourceIdKeys[resourceType] ?? '']
-  return typeof value === 'string' && /^[A-Za-z0-9_-]{2,128}$/.test(value)
+  const payload = payloadRecord(event)
+  // Prefer the event's own resourceType/resourceId when present (e.g. comment.created carries the
+  // commenting task/project's id alongside the comment's own id) — that's the thing a notification click
+  // can actually navigate to (there is no standalone "comment" page), whereas the policy's static
+  // resourceType (e.g. 'comment') only identifies what KIND of event this was.
+  const payloadResourceType = payload.resourceType
+  const payloadResourceId = payload.resourceId
+  if (typeof payloadResourceType === 'string' && typeof payloadResourceId === 'string' && idPattern.test(payloadResourceId)) {
+    return { type: payloadResourceType, id: payloadResourceId }
+  }
+  const value = payload[resourceIdKeys[resourceType] ?? '']
+  return typeof value === 'string' && idPattern.test(value)
     ? { type: resourceType, id: value }
     : null
 }

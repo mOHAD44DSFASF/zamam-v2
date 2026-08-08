@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AuthorizationPrincipal, AuthorizationRequest } from '@zamam/authorization'
 import {
-  inQuietHours, nextNotificationDeliveryAt, type OutboxEvent,
+  inQuietHours, nextNotificationDeliveryAt, notificationEventPolicy, resolveNotificationMessage, type OutboxEvent,
 } from '@zamam/domain'
 import type { AtomicStore, AtomicTransaction, StoredDocument } from '@zamam/firestore'
 import {
@@ -165,6 +165,63 @@ describe('notification scheduling and bounded queries', () => {
     const now = '2026-07-30T10:00:00.000Z'
     expect(Date.parse(nextNotificationDeliveryAt(now, 'daily', input)!)).toBeGreaterThan(Date.parse(now))
     expect(Date.parse(nextNotificationDeliveryAt(now, 'weekly', input)!)).toBeGreaterThan(Date.parse(now))
+  })
+
+  it('resolves every titleKey/previewKey the policy table emits to real Arabic text, not a blank string', () => {
+    // Regression test: /v1/notifications/query used to return the raw stored notification doc — which
+    // carries titleKey/previewKey (i18n keys), not the `title`/`preview` fields the frontend reads — so
+    // every notification rendered with a blank title and preview. This asserts every key actually
+    // referenced by eventPolicies resolves to non-empty text, and an unknown key doesn't crash (falls
+    // back to the raw key rather than throwing).
+    const allKeys = ['created', 'assigned', 'transitioned', 'step_arrived', 'step_sent_back', 'overdue']
+      .map((suffix) => `notification.task.${suffix}`)
+      .concat(['notification.review.requested', 'notification.approval.requested', 'notification.approval.completed', 'notification.comment.mentioned', 'notification.file.available', 'notification.file.quarantined', 'notification.leave.requested', 'notification.security.user_disabled', 'notification.open_securely', 'notification.review_securely', 'notification.approval_securely', 'notification.security_review'])
+    for (const key of allKeys) {
+      const resolved = resolveNotificationMessage(key)
+      expect(resolved).not.toBe('')
+      expect(resolved).not.toBe(key)
+    }
+    expect(resolveNotificationMessage('notification.made_up_key_no_such_thing')).toBe('notification.made_up_key_no_such_thing')
+  })
+
+  it('keys the user-disabled policy entry to the event type EmployeeService.disable() actually emits', () => {
+    // Regression test: the policy used to be keyed 'security.user_disabled', but employee/service.ts emits
+    // 'user.disabled' — a name nothing in the policy table matched, so this notification (and its worker
+    // registry entry) silently never fired for any disabled account.
+    expect(notificationEventPolicy('user.disabled')).toMatchObject({ titleKey: 'notification.security.user_disabled', critical: true })
+    expect(notificationEventPolicy('security.user_disabled')).toBeNull()
+  })
+
+  it('projects user.disabled (the real emitted event name) into a real notification', async () => {
+    const store = new MemoryStore()
+    const service = new NotificationProjectionService(store, {
+      resolve: async () => [{ userId: 'user-1', locale: 'ar', timezone: 'Africa/Cairo', visibility: 'internal', active: true, canAccess: true }],
+    }, { get: async () => null }, { now: () => '2026-07-30T19:00:00.000Z' })
+    expect(await service.project({ ...event('user.disabled'), payload: { userId: 'user-3' } })).toMatchObject({ created: 1 })
+    expect([...store.records.entries()].find(([path]) => path.includes('/notification/'))?.[1]).toMatchObject({
+      titleKey: 'notification.security.user_disabled',
+    })
+  })
+
+  it('prefers a comment event\'s own resourceType/resourceId (the commented-on task) over the comment id, so a click can deep-link somewhere real', async () => {
+    const store = new MemoryStore()
+    const service = new NotificationProjectionService(store, {
+      resolve: async () => [{ userId: 'user-1', locale: 'ar', timezone: 'Africa/Cairo', visibility: 'internal', active: true, canAccess: true }],
+    }, { get: async () => null }, { now: () => '2026-07-30T19:00:00.000Z' })
+    await service.project(event('comment.created'))
+    const notification = [...store.records.entries()].find(([path]) => path.includes('/notification/'))?.[1]
+    // event()'s default payload has both commentId:'comment-1' and resourceType/resourceId — the fixture
+    // as written doesn't set resourceType/resourceId explicitly, so this exercises the fallback path; a
+    // payload that DOES carry them (as the real comment.created emitter always does) takes priority.
+    expect(notification?.resourceType).toBe('comment')
+    const store2 = new MemoryStore()
+    const service2 = new NotificationProjectionService(store2, {
+      resolve: async () => [{ userId: 'user-1', locale: 'ar', timezone: 'Africa/Cairo', visibility: 'internal', active: true, canAccess: true }],
+    }, { get: async () => null }, { now: () => '2026-07-30T19:00:00.000Z' })
+    await service2.project({ ...event('comment.created'), payload: { commentId: 'comment-1', resourceType: 'task', resourceId: 'task-9', visibility: 'internal', mentionedUserIds: ['user-1'] } })
+    expect([...store2.records.entries()].find(([path]) => path.includes('/notification/'))?.[1]).toMatchObject({
+      resourceType: 'task', resourceId: 'task-9',
+    })
   })
 
   it('enforces bounded inbox and delivery scans', () => {

@@ -10,7 +10,7 @@ const id = /^[A-Za-z0-9_-]{2,128}$/
 // v1 simplification: the audience is every user id found in a fixed set of well-known payload fields
 // (already written by the existing, tested *Service classes — see AuditCommandService callers), not a
 // bespoke per-event-type resolver. No existing audience-resolution algorithm existed to reuse.
-const CANDIDATE_FIELDS = ['assigneeUserId', 'reviewerUserIds', 'mentionedUserIds', 'approverUserId', 'requestedBy', 'createdBy', 'userId'] as const
+const CANDIDATE_FIELDS = ['assigneeUserId', 'reviewerUserIds', 'mentionedUserIds', 'approverUserId', 'requestedBy', 'createdBy', 'userId', 'recipientUserIds'] as const
 
 function candidateUserIds(event: OutboxEvent): readonly string[] {
   const payload = event.payload && typeof event.payload === 'object' && !Array.isArray(event.payload)

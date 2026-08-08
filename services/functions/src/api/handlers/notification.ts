@@ -1,4 +1,5 @@
 import { tenantDocumentPath } from '@zamam/firestore'
+import { resolveNotificationMessage } from '@zamam/domain'
 import { NotificationCommandService, buildNotificationInboxQuery, type NotificationLookupPort } from '../../notification/service.js'
 import type { Deps } from '../deps.js'
 import { evaluateCapabilities, readDoc } from '../deps.js'
@@ -29,10 +30,17 @@ export function createNotificationHandlers(deps: Deps): HandlerRegistry {
         ...(Array.isArray(input.cursor) ? { cursor: input.cursor } : {}),
       })
       const page = await deps.queries.list<Record<string, unknown>>(`v2Organizations/${context.organizationId}/notification`, query)
+      // Every stored notification carries titleKey/previewKey (i18n keys), not display text — resolve them
+      // here so the frontend's `title`/`preview` fields are finally populated instead of silently blank.
+      const items = page.items.map((item) => ({
+        ...item,
+        title: resolveNotificationMessage(String(item.titleKey ?? '')),
+        preview: resolveNotificationMessage(String(item.previewKey ?? '')),
+      }))
       const capabilities = await evaluateCapabilities(deps, context.principal, context.organizationId, {
         managePreferences: 'notification.manage_preferences',
       })
-      return { items: page.items, nextCursor: page.nextCursor, capabilities }
+      return { items, nextCursor: page.nextCursor, capabilities }
     },
     '/v1/notifications/status': (context, input) => service.setStatus(
       metadata(context), requireString(input, 'notificationId'), requireNumber(input, 'expectedVersion'),

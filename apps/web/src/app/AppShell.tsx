@@ -6,7 +6,10 @@ import {
 import { useAuth } from '../auth/auth-context'
 import { useTenant } from '../tenant/tenant-context'
 import { notificationClient, type NotificationSummary } from '../features/notifications/client'
+import { NotificationPermissionBanner } from '../features/notifications/NotificationPermissionBanner'
+import { useNotificationPush } from '../features/notifications/useNotificationPush'
 import { useEscapeToClose } from '../lib/useEscapeToClose'
+import { registerServiceWorker } from '../lib/pushNotifications'
 import zamamIcon from '../assets/ZAMAM/1T-optimized.webp'
 
 /**
@@ -179,6 +182,8 @@ export function AppShell() {
   const displayName = session?.displayName || 'مستخدم'
   const initial = displayName.trim().charAt(0) || '?'
   useEscapeToClose(useCallback(() => setMobileOpen(false), []))
+  useEffect(() => { void registerServiceWorker() }, [])
+  useNotificationPush(organizationId ?? null)
 
   return (
     <div dir="rtl" className="flex min-h-screen bg-canvas">
@@ -231,6 +236,7 @@ export function AppShell() {
           </div>
         )}
 
+        <NotificationPermissionBanner />
         <main className="min-w-0 flex-1">
           <Outlet />
         </main>
