@@ -2,10 +2,11 @@ import { AlertTriangle, CalendarDays, ClipboardList, Columns3, FilterX, FolderKa
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../auth/auth-context'
-import { taskClient as defaultClient, type TaskClient, type TaskScope, type TaskSnapshot, type TaskSummary } from './client'
+import type { TaskClient, TaskScope, TaskSnapshot, TaskSummary } from './client'
 import { TaskDetails, WhatsappReminderButton } from './TaskDetailPipeline'
 import { TaskEditor } from './TaskEditor'
-import { PriorityBadge, priorityOptions, statusLabel } from './shared'
+import { PriorityBadge } from './shared'
+import { priorityOptions, statusLabel } from './constants'
 import { useEscapeToClose } from '../../lib/useEscapeToClose'
 
 /**
@@ -301,5 +302,3 @@ export function TaskManagementScreen({ organizationId, client, view = 'list', on
     }} />}
   </main>
 }
-
-export const defaultTaskClient = defaultClient

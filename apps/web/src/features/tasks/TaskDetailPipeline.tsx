@@ -1,7 +1,8 @@
 import { Check, CheckSquare, Clock3, LinkIcon, ListChecks, MessageCircle, Pencil, UserRound, Undo2 } from 'lucide-react'
 import { buildWhatsappLink, buildWhatsappReminderMessage } from '../../lib/whatsapp'
 import type { TaskSnapshot, TaskStep, TaskSummary } from './client'
-import { PriorityBadge, statusLabel, stepStatusLabel } from './shared'
+import { PriorityBadge } from './shared'
+import { statusLabel, stepStatusLabel } from './constants'
 
 /**
  * The task detail view + its step-pipeline — ZAMAM's signature screen (see DESIGN.md: "the pipeline is

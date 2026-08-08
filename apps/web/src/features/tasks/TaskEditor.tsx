@@ -1,7 +1,7 @@
 import { LoaderCircle, Plus, Trash2, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { TaskSnapshot, TaskStepInputForm, TaskSummary } from './client'
-import { priorityOptions } from './shared'
+import { priorityOptions } from './constants'
 import { useEscapeToClose } from '../../lib/useEscapeToClose'
 
 /**
