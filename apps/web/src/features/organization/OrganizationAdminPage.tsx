@@ -76,7 +76,7 @@ function CreateDialog({
           </label>
           <label className={fieldLabel}>
             الرمز
-            <input required dir="ltr" pattern="[A-Za-z0-9][A-Za-z0-9_-]{1,31}" value={code} onChange={(event) => setCode(event.target.value)} className={`${fieldInput} text-left`} />
+            <input required dir="ltr" pattern="[A-Za-z0-9][A-Za-z0-9_\-]{1,31}" value={code} onChange={(event) => setCode(event.target.value)} className={`${fieldInput} text-left`} />
           </label>
         </div>
         {error && <p role="alert" className="mt-4 rounded-md border border-danger/30 bg-danger-subtle px-3 py-2 text-label font-semibold text-danger">{error}</p>}

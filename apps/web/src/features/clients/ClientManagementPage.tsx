@@ -53,7 +53,7 @@ function EntryDialog({
         <div className="mt-5 space-y-4">
           <label className="block text-sm font-semibold">الاسم<input ref={first} name="name" required minLength={2} maxLength={160} className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2" /></label>
           {mode === 'client' ? <>
-            <label className="block text-sm font-semibold">الرمز<input name="code" required dir="ltr" pattern="[A-Za-z0-9][A-Za-z0-9_-]{1,31}" className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-left" /></label>
+            <label className="block text-sm font-semibold">الرمز<input name="code" required dir="ltr" pattern="[A-Za-z0-9][A-Za-z0-9_\-]{1,31}" className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-left" /></label>
             <label className="block text-sm font-semibold">القطاع<input name="industry" className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2" /></label>
           </> : <>
             <label className="block text-sm font-semibold">البريد الإلكتروني<input name="email" type="email" required dir="ltr" className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-left" /></label>

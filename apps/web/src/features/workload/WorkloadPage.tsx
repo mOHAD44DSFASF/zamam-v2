@@ -1,5 +1,6 @@
 import { AlertTriangle, Gauge, LoaderCircle, RefreshCw, Users } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useTenant } from '../../tenant/tenant-context'
 import {
   workloadClient, type WorkloadClient, type WorkloadScope, type WorkloadSnapshot,
@@ -100,7 +101,15 @@ export function WorkloadScreen({
     if (next) setScope(next)
   }
   return <main dir="rtl" className="min-h-screen bg-canvas">
-    <header className="border-b border-border-subtle bg-surface"><div className="mx-auto max-w-6xl px-5 py-6"><p className="text-label font-semibold text-brand-300">{t.planning}</p><h1 className="text-display font-extrabold text-text-primary">{t.title}</h1></div></header>
+    <header className="border-b border-border-subtle bg-surface"><div className="mx-auto max-w-6xl px-5 py-6"><p className="text-label font-semibold text-brand-300">{t.planning}</p><h1 className="text-display font-extrabold text-text-primary">{t.title}</h1></div>
+      {/* Workload and Reports are two views of the same "performance" area — neither has its own sidebar
+          slot (the sidebar's single "التقارير" item points here), so this tab pair is what makes Reports
+          actually reachable without typing its URL. */}
+      <nav aria-label="أقسام الأداء" className="mx-auto flex max-w-6xl gap-1 px-5">
+        <span className="rounded-t-md border-b-2 border-brand-400 px-4 py-2.5 text-body font-bold text-brand-300">عبء العمل</span>
+        <Link to="/reports" className="rounded-t-md border-b-2 border-transparent px-4 py-2.5 text-body font-bold text-text-secondary transition-colors hover:text-text-primary">التقارير</Link>
+      </nav>
+    </header>
     <div className="mx-auto max-w-6xl px-5 py-6">
       <section aria-label={t.planning} className="flex flex-wrap items-end gap-4 border-b border-border-subtle pb-6">
         <label className="min-w-56 text-label font-bold text-text-secondary">

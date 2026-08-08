@@ -75,7 +75,7 @@ function InviteDialog({
           <label className={fieldLabel}>الاسم الكامل<input ref={firstInput} name="displayName" required minLength={2} className={fieldInput} /></label>
           <label className={fieldLabel}>الاسم الأول<input name="firstName" required minLength={2} className={fieldInput} /></label>
           <label className={fieldLabel}>البريد الإلكتروني<input name="email" type="email" required dir="ltr" className={`${fieldInput} text-left`} /></label>
-          <label className={fieldLabel}>رقم الموظف<input name="employeeNumber" required pattern="[A-Za-z0-9][A-Za-z0-9_-]{1,31}" dir="ltr" className={`${fieldInput} text-left`} /></label>
+          <label className={fieldLabel}>رقم الموظف<input name="employeeNumber" required pattern="[A-Za-z0-9][A-Za-z0-9_\-]{1,31}" dir="ltr" className={`${fieldInput} text-left`} /></label>
           <label className={fieldLabel}>المسمى الوظيفي<input name="jobTitle" required minLength={2} className={fieldInput} /></label>
           <label className={fieldLabel}>نوع العلاقة<select name="employmentType" className={`${fieldInput} cursor-pointer`}><option value="employee">موظف</option><option value="contractor">متعاون خارجي</option></select></label>
           <label className={fieldLabel}>القسم الأساسي<select name="primaryDepartmentId" required className={`${fieldInput} cursor-pointer`}>{snapshot.departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></label>

@@ -28,6 +28,7 @@ export function CreateMemberDialog({
   const [error, setError] = useState('')
   const [created, setCreated] = useState<CreateMemberResult | null>(null)
   const [copied, setCopied] = useState(false)
+  const [copyFailed, setCopyFailed] = useState(false)
 
   useEffect(() => { firstInput.current?.focus() }, [])
   // On the one-time password screen, closing (Escape included) is blocked until the password is copied —
@@ -57,11 +58,16 @@ export function CreateMemberDialog({
           </div>
 
           <div className="mt-3 flex items-center gap-2 rounded-md border-2 border-brand-400 bg-canvas px-3 py-2.5" dir="ltr">
-            <code className="flex-1 select-all break-all text-body font-bold text-text-primary">{created.temporaryPassword}</code>
+            {/* onCopy also satisfies the gate below — if the Clipboard API write fails (permission denied,
+                insecure context, browser policy), the admin can still select the text and press Ctrl+C;
+                the native browser copy event fires regardless of whether our JS-driven write succeeded. */}
+            <code className="flex-1 select-all break-all text-body font-bold text-text-primary" onCopy={() => setCopied(true)}>{created.temporaryPassword}</code>
             <button
               type="button"
               aria-label="نسخ كلمة المرور"
-              onClick={() => { void navigator.clipboard.writeText(created.temporaryPassword).then(() => setCopied(true)) }}
+              onClick={() => {
+                void navigator.clipboard.writeText(created.temporaryPassword).then(() => setCopied(true), () => setCopyFailed(true))
+              }}
               className={`grid size-9 shrink-0 cursor-pointer place-items-center rounded-md transition-all active:scale-95 ${copied ? 'bg-success-subtle text-success' : 'text-text-secondary hover:bg-surface-hover hover:text-text-primary'}`}
             >
               {copied ? <Check className="size-4" aria-hidden="true" /> : <Copy className="size-4" aria-hidden="true" />}
@@ -71,6 +77,9 @@ export function CreateMemberDialog({
             <p role="status" className="mt-2 flex items-center gap-1.5 text-caption font-bold text-success">
               <Check className="size-3.5" aria-hidden="true" /> تم النسخ.
             </p>
+          )}
+          {!copied && copyFailed && (
+            <p role="alert" className="mt-2 text-caption font-semibold text-warning">تعذر النسخ التلقائي — حدد النص أعلاه يدويًا ثم اضغط Ctrl+C.</p>
           )}
 
           <div className="mt-6 flex flex-col items-end gap-2">
@@ -135,7 +144,7 @@ export function CreateMemberDialog({
           <label className={fieldLabel}>الاسم الأول<input name="firstName" required minLength={2} className={fieldInput} /></label>
           <label className={fieldLabel}>البريد الإلكتروني<input name="email" type="email" required dir="ltr" className={`${fieldInput} text-left`} /></label>
           <label className={fieldLabel}>رقم واتساب<input name="whatsappPhone" type="tel" required placeholder="+9665xxxxxxxx" dir="ltr" className={`${fieldInput} text-left`} /></label>
-          <label className={fieldLabel}>رقم الموظف<input name="employeeNumber" required pattern="[A-Za-z0-9][A-Za-z0-9_-]{1,31}" dir="ltr" className={`${fieldInput} text-left`} /></label>
+          <label className={fieldLabel}>رقم الموظف<input name="employeeNumber" required pattern="[A-Za-z0-9][A-Za-z0-9_\-]{1,31}" dir="ltr" className={`${fieldInput} text-left`} /></label>
           <label className={fieldLabel}>المسمى الوظيفي<input name="jobTitle" required minLength={2} className={fieldInput} /></label>
           <label className={fieldLabel}>نوع العلاقة<select name="employmentType" className={fieldInput}><option value="employee">موظف</option><option value="contractor">متعاون خارجي</option></select></label>
           <label className={fieldLabel}>القسم الأساسي<select name="primaryDepartmentId" required className={fieldInput}>{departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></label>

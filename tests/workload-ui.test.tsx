@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { axe } from 'jest-axe'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WorkloadScreen } from '../apps/web/src/features/workload/WorkloadPage'
 import type {
@@ -39,7 +40,7 @@ function client(value = snapshot): WorkloadClient {
 }
 describe('workload UI', () => {
   it('renders an accessible RTL capacity view and labels unknown data', async () => {
-    const view = render(<WorkloadScreen organizationId="org-1" client={client()} initialScope={scope} initialPeriodStart="2026-08-03" />)
+    const view = render(<MemoryRouter><WorkloadScreen organizationId="org-1" client={client()} initialScope={scope} initialPeriodStart="2026-08-03" /></MemoryRouter>)
     expect(await screen.findByRole('heading', { name: ar.title })).toBeTruthy()
     expect(screen.getByText(ar.unknownNote)).toBeTruthy()
     expect(screen.getByText('\u0633\u0627\u0631\u0629 \u0623\u062d\u0645\u062f')).toBeTruthy()
@@ -47,7 +48,7 @@ describe('workload UI', () => {
   })
   it('rebuilds only through the trusted client with explicit scope and period', async () => {
     const api = client()
-    render(<WorkloadScreen organizationId="org-1" client={api} initialScope={scope} initialPeriodStart="2026-08-03" />)
+    render(<MemoryRouter><WorkloadScreen organizationId="org-1" client={api} initialScope={scope} initialPeriodStart="2026-08-03" /></MemoryRouter>)
     await screen.findByRole('heading', { name: ar.title })
     fireEvent.click(screen.getByRole('button', { name: ar.rebuild }))
     await waitFor(() => expect(api.rebuild).toHaveBeenCalledWith(
@@ -55,9 +56,9 @@ describe('workload UI', () => {
     ))
   })
   it('redacts employee names when the projection capability denies them', async () => {
-    render(<WorkloadScreen organizationId="org-1" client={client({
+    render(<MemoryRouter><WorkloadScreen organizationId="org-1" client={client({
       ...snapshot, capabilities: { ...snapshot.capabilities, viewEmployeeNames: false },
-    })} initialScope={scope} initialPeriodStart="2026-08-03" />)
+    })} initialScope={scope} initialPeriodStart="2026-08-03" /></MemoryRouter>)
     await screen.findByRole('heading', { name: ar.title })
     expect(screen.queryByText('\u0633\u0627\u0631\u0629 \u0623\u062d\u0645\u062f')).toBeNull()
     expect(screen.getByText('ID er-1')).toBeTruthy()
