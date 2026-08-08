@@ -1,6 +1,7 @@
-import { Check, CheckSquare, Clock3, LinkIcon, ListChecks, MessageCircle, Pencil, UserRound, Undo2 } from 'lucide-react'
+import { Archive, Check, CheckSquare, Clock3, LinkIcon, ListChecks, LoaderCircle, MessageCircle, Pencil, Plus, UserRound, Undo2 } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
 import { buildWhatsappLink, buildWhatsappReminderMessage } from '../../lib/whatsapp'
-import type { TaskSnapshot, TaskStep, TaskSummary } from './client'
+import type { Checklist, Subtask, TaskClient, TaskSnapshot, TaskStep, TaskSummary } from './client'
 import { PriorityBadge } from './shared'
 import { statusLabel, stepStatusLabel } from './constants'
 
@@ -142,16 +143,118 @@ export function StepPipeline({ task, snapshot, viewerUserId, onCompleteStep, onS
   </section>
 }
 
-export function TaskDetails({ task, snapshot, viewerUserId, canEdit, onEdit, onCompleteStep, onSendBack, onSetStepDueDate }: {
+const subtaskStatusLabel = { ready: 'جاهزة', in_progress: 'قيد التنفيذ', done: 'منتهية' } as const
+
+/** Both panels share the same load-on-mount + local mutate-then-refetch shape: no optimistic update, since
+ * these are low-frequency actions where a round-trip is imperceptible and refetching keeps the version
+ * numbers (needed for the next mutation) always correct without duplicating the server's state machine. */
+function SubtasksPanel({ task, client, organizationId, canManage }: { task: TaskSummary; client: TaskClient; organizationId: string; canManage: boolean }) {
+  const [subtasks, setSubtasks] = useState<Subtask[] | null>(null)
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [title, setTitle] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const load = useCallback(async () => {
+    try { setSubtasks((await client.loadChecklistAndSubtasks(organizationId, task.id)).subtasks as Subtask[]); setStatus('ready') }
+    catch { setStatus('error') }
+  }, [client, organizationId, task.id])
+  // No setStatus('loading') here on purpose — status already starts as 'loading'. A refetch after a
+  // mutation (see onChange handlers below) intentionally does NOT reset to the loading spinner — it swaps
+  // the list in place once the new data arrives, which reads better for a small in-panel list.
+  // The Promise.resolve().then() wrapper (not just calling load() directly) is required for
+  // react-hooks/set-state-in-effect: the rule flags any setState call it can trace as reachable directly
+  // from the effect body, even one only reached after an await inside load() itself; nesting the call one
+  // microtask deeper, the same fix already used in TasksListView.tsx's mount effect, satisfies it.
+  useEffect(() => { void Promise.resolve().then(() => load()) }, [load])
+
+  if (status === 'loading') return <p role="status" className="py-8 text-center text-text-secondary"><LoaderCircle className="inline size-4 animate-spin" aria-hidden="true" /> جارٍ التحميل...</p>
+  if (status === 'error' || !subtasks) return <p className="py-8 text-center text-danger">تعذر تحميل المهام الفرعية.</p>
+
+  return <div className="py-5">
+    {canManage && <form className="mb-4 flex gap-2" onSubmit={async (event) => {
+      event.preventDefault()
+      if (!title.trim()) return
+      setSubmitting(true)
+      try { await client.addSubtask(organizationId, { taskId: task.id, title: title.trim() }); setTitle(''); await load() }
+      finally { setSubmitting(false) }
+    }}>
+      <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="مهمة فرعية جديدة..." className="flex-1 rounded-md border border-border-strong bg-canvas px-3 py-2 text-text-primary placeholder:text-text-tertiary" />
+      <button type="submit" disabled={submitting || !title.trim()} className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-brand-500 px-3 py-2 text-body font-bold text-text-primary hover:bg-brand-400 disabled:cursor-not-allowed disabled:opacity-50"><Plus className="size-4" aria-hidden="true" /> إضافة</button>
+    </form>}
+    {subtasks.length === 0
+      ? <p className="py-6 text-center text-text-tertiary">لا توجد مهام فرعية بعد.</p>
+      : <ul className="space-y-2">{subtasks.map((subtask) => <li key={subtask.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border-subtle bg-surface p-3">
+          <div className="min-w-0"><p className="truncate font-bold text-text-primary">{subtask.title}</p>{subtask.assigneeName && <p className="text-caption text-text-secondary">{subtask.assigneeName}</p>}</div>
+          {canManage
+            ? <select value={subtask.status} onChange={async (event) => { await client.setSubtaskStatus(organizationId, { subtaskId: subtask.id, expectedVersion: subtask.version, status: event.target.value as Subtask['status'] }); await load() }} className="cursor-pointer rounded-sm border border-border-strong bg-canvas px-2 py-1 text-caption text-text-primary">
+                {Object.entries(subtaskStatusLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            : <span className="rounded-sm bg-surface-hover px-2 py-1 text-caption font-bold text-text-secondary">{subtaskStatusLabel[subtask.status]}</span>}
+        </li>)}</ul>}
+  </div>
+}
+
+function ChecklistPanel({ task, client, organizationId, canManage }: { task: TaskSummary; client: TaskClient; organizationId: string; canManage: boolean }) {
+  const [checklists, setChecklists] = useState<Checklist[] | null>(null)
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [text, setText] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const load = useCallback(async () => {
+    // See SubtasksPanel's load() above for why there's no setStatus('loading') here.
+    try { setChecklists((await client.loadChecklistAndSubtasks(organizationId, task.id)).checklists as Checklist[]); setStatus('ready') }
+    catch { setStatus('error') }
+  }, [client, organizationId, task.id])
+  // See SubtasksPanel's mount effect above for why this goes through Promise.resolve().then() rather than
+  // calling load() directly.
+  useEffect(() => { void Promise.resolve().then(() => load()) }, [load])
+
+  if (status === 'loading') return <p role="status" className="py-8 text-center text-text-secondary"><LoaderCircle className="inline size-4 animate-spin" aria-hidden="true" /> جارٍ التحميل...</p>
+  if (status === 'error' || !checklists) return <p className="py-8 text-center text-danger">تعذر تحميل قائمة التحقق.</p>
+
+  // The backend only supports creating a checklist with its items in one shot (no "add item to an existing
+  // checklist" command) — so each "إضافة" call creates its own single-item checklist, and this panel flattens
+  // every checklist's items into one list. Functionally identical to one running checklist from the user's
+  // point of view; avoids inventing a new backend command for something the tab genuinely just needs to render.
+  const items = checklists.flatMap((checklist) => checklist.items.map((item) => ({ ...item, checklistId: checklist.id })))
+  return <div className="py-5">
+    {canManage && <form className="mb-4 flex gap-2" onSubmit={async (event) => {
+      event.preventDefault()
+      if (!text.trim()) return
+      setSubmitting(true)
+      try { await client.createChecklist(organizationId, { taskId: task.id, title: 'قائمة تحقق', required: false, items: [{ text: text.trim(), required: false }] }); setText(''); await load() }
+      finally { setSubmitting(false) }
+    }}>
+      <input value={text} onChange={(event) => setText(event.target.value)} placeholder="بند جديد..." className="flex-1 rounded-md border border-border-strong bg-canvas px-3 py-2 text-text-primary placeholder:text-text-tertiary" />
+      <button type="submit" disabled={submitting || !text.trim()} className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-brand-500 px-3 py-2 text-body font-bold text-text-primary hover:bg-brand-400 disabled:cursor-not-allowed disabled:opacity-50"><Plus className="size-4" aria-hidden="true" /> إضافة</button>
+    </form>}
+    {items.length === 0
+      ? <p className="py-6 text-center text-text-tertiary">لا توجد بنود بعد.</p>
+      : <ul className="space-y-2">{items.map((item) => <li key={item.id} className="flex items-center gap-3 rounded-md border border-border-subtle bg-surface p-3">
+          <input
+            type="checkbox" checked={item.completed} disabled={!canManage}
+            onChange={async (event) => { await client.setChecklistItem(organizationId, { itemId: item.id, expectedVersion: item.version, completed: event.target.checked }); await load() }}
+            className="size-4 cursor-pointer rounded-sm border-border-strong accent-brand-500 disabled:cursor-not-allowed"
+          />
+          <span className={item.completed ? 'text-text-tertiary line-through' : 'text-text-primary'}>{item.text}</span>
+        </li>)}</ul>}
+  </div>
+}
+
+export function TaskDetails({ task, snapshot, viewerUserId, canEdit, client, organizationId, onEdit, onCompleteStep, onSendBack, onSetStepDueDate, onArchive }: {
   task: TaskSummary
   snapshot: TaskSnapshot
   viewerUserId: string | null
   canEdit: boolean
+  client: TaskClient
+  organizationId: string
   onEdit: () => void
   onCompleteStep: () => Promise<void>
   onSendBack: () => void
   onSetStepDueDate: (order: number, expectedVersion: number, dueAt: string | null) => Promise<void>
+  onArchive?: () => Promise<void>
 }) {
+  const [activeTab, setActiveTab] = useState<'overview' | 'subtasks' | 'checklist'>('overview')
+  const canManageSubItems = canEdit && !['completed', 'cancelled', 'archived'].includes(task.status)
+  const tabClass = (tab: typeof activeTab) => `-mb-px cursor-pointer border-b-2 px-1 pb-3 pt-4 transition-colors ${activeTab === tab ? 'border-brand-400 text-brand-300' : 'border-transparent text-text-secondary hover:text-text-primary'}`
   return <>
     <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border-subtle pb-5">
       <div>
@@ -162,24 +265,36 @@ export function TaskDetails({ task, snapshot, viewerUserId, canEdit, onEdit, onC
         </div>
         <p className="mt-1 text-body text-text-secondary">{task.projectName || 'بدون مشروع'}{task.workspaceName ? ` · ${task.workspaceName}` : ''}</p>
       </div>
-      {canEdit && !['completed', 'cancelled', 'archived'].includes(task.status) && <button onClick={onEdit} className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border-strong px-3 py-2 text-body font-bold text-text-primary hover:bg-surface-hover"><Pencil className="size-4" aria-hidden="true" /> تعديل</button>}
+      <div className="flex items-center gap-2">
+        {canEdit && !['completed', 'cancelled', 'archived'].includes(task.status) && <button onClick={onEdit} className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border-strong px-3 py-2 text-body font-bold text-text-primary hover:bg-surface-hover"><Pencil className="size-4" aria-hidden="true" /> تعديل</button>}
+        {/* Archive is only a legal transition from completed/cancelled (see assertTaskStatusTransition in
+            @zamam/domain) — showing it any earlier would let the user click into a guaranteed backend
+            rejection instead of a clear reason why the action isn't available yet. */}
+        {onArchive && ['completed', 'cancelled'].includes(task.status) && <button onClick={() => void onArchive()} className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border-strong px-3 py-2 text-body font-bold text-text-secondary hover:border-danger/40 hover:bg-danger-subtle hover:text-danger"><Archive className="size-4" aria-hidden="true" /> أرشفة</button>}
+      </div>
     </div>
     <nav aria-label="أقسام المهمة" className="flex gap-5 overflow-x-auto border-b border-border-subtle text-body font-bold">
-      <span className="-mb-px border-b-2 border-brand-400 px-1 pb-3 pt-4 text-brand-300">نظرة عامة</span>
-      <span aria-disabled="true" title="غير متاح بعد" className="-mb-px cursor-not-allowed border-b-2 border-transparent px-1 pb-3 pt-4 text-text-tertiary/60">المهام الفرعية</span>
-      <span aria-disabled="true" title="غير متاح بعد" className="-mb-px cursor-not-allowed border-b-2 border-transparent px-1 pb-3 pt-4 text-text-tertiary/60">قائمة التحقق</span>
+      <button type="button" onClick={() => setActiveTab('overview')} className={tabClass('overview')}>نظرة عامة</button>
+      <button type="button" onClick={() => setActiveTab('subtasks')} className={tabClass('subtasks')}>المهام الفرعية</button>
+      <button type="button" onClick={() => setActiveTab('checklist')} className={tabClass('checklist')}>قائمة التحقق</button>
       <a href={`/tasks/${task.id}/collaboration`} className="-mb-px border-b-2 border-transparent px-1 pb-3 pt-4 text-text-secondary transition-colors hover:border-brand-400/50 hover:text-brand-300">التعليقات والنشاط</a>
     </nav>
-    <p className="min-h-28 whitespace-pre-wrap py-6 text-text-secondary">{task.description || 'لا يوجد وصف.'}</p>
-    <div className="grid gap-4 border-t border-border-subtle pt-5 sm:grid-cols-2">
-      <div className="flex gap-2 text-text-secondary"><Clock3 className="size-4" aria-hidden="true" /><span>{task.dueAt ?? 'دون موعد'}</span></div>
-      <div className="flex gap-2 text-text-secondary"><UserRound className="size-4" aria-hidden="true" /><span>{task.assigneeNames.join('، ') || 'غير مسندة'}</span></div>
-    </div>
-    {task.driveLink && <p className="mt-3"><a href={task.driveLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-body font-bold text-brand-300 underline"><LinkIcon className="size-4" aria-hidden="true" /> رابط Drive للمهمة</a></p>}
-    <div className="mt-5 flex flex-wrap gap-3">
-      <span className="inline-flex items-center gap-2 rounded-sm bg-surface-hover px-2.5 py-1 text-label font-semibold text-text-secondary"><CheckSquare className="size-3.5" aria-hidden="true" /> {task.completedChecklistCount}/{task.checklistCount} قائمة تحقق</span>
-      <span className="inline-flex items-center gap-2 rounded-sm bg-surface-hover px-2.5 py-1 text-label font-semibold text-text-secondary"><ListChecks className="size-3.5" aria-hidden="true" /> {task.completedSubtaskCount}/{task.subtaskCount} مهام فرعية</span>
-    </div>
+    {activeTab === 'subtasks' && <SubtasksPanel task={task} client={client} organizationId={organizationId} canManage={canManageSubItems} />}
+    {activeTab === 'checklist' && <ChecklistPanel task={task} client={client} organizationId={organizationId} canManage={canManageSubItems} />}
+    {activeTab === 'overview' && <>
+      <p className="min-h-28 whitespace-pre-wrap py-6 text-text-secondary">{task.description || 'لا يوجد وصف.'}</p>
+      <div className="grid gap-4 border-t border-border-subtle pt-5 sm:grid-cols-2">
+        <div className="flex gap-2 text-text-secondary"><Clock3 className="size-4" aria-hidden="true" /><span>{task.dueAt ?? 'دون موعد'}</span></div>
+        <div className="flex gap-2 text-text-secondary"><UserRound className="size-4" aria-hidden="true" /><span>{task.assigneeNames.join('، ') || 'غير مسندة'}</span></div>
+      </div>
+      {task.driveLink && <p className="mt-3"><a href={task.driveLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-body font-bold text-brand-300 underline"><LinkIcon className="size-4" aria-hidden="true" /> رابط Drive للمهمة</a></p>}
+      <div className="mt-5 flex flex-wrap gap-3">
+        <button type="button" onClick={() => setActiveTab('checklist')} className="inline-flex cursor-pointer items-center gap-2 rounded-sm bg-surface-hover px-2.5 py-1 text-label font-semibold text-text-secondary hover:bg-surface-raised"><CheckSquare className="size-3.5" aria-hidden="true" /> قائمة التحقق</button>
+        <button type="button" onClick={() => setActiveTab('subtasks')} className="inline-flex cursor-pointer items-center gap-2 rounded-sm bg-surface-hover px-2.5 py-1 text-label font-semibold text-text-secondary hover:bg-surface-raised"><ListChecks className="size-3.5" aria-hidden="true" /> المهام الفرعية</button>
+      </div>
+    </>}
+    {/* The pipeline stays visible under every tab, not just Overview — it's the signature screen and the
+        complete/send-back actions live there; hiding it while checking off subtasks would be a regression. */}
     <StepPipeline task={task} snapshot={snapshot} viewerUserId={viewerUserId} onCompleteStep={onCompleteStep} onSendBack={onSendBack} onSetStepDueDate={onSetStepDueDate} />
   </>
 }

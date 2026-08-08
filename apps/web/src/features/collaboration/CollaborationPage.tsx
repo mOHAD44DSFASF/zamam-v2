@@ -41,15 +41,6 @@ export function CollaborationScreen({
     client.load(organizationId, resourceType, resourceId).then(
       (value) => {
         if (!active) return
-        // Defends against a known backend contract mismatch: /v1/collaboration/query has been observed
-        // returning {items, nextCursor} instead of the CollaborationSnapshot shape this screen expects
-        // (missing capabilities/comments/resource/watched). Treating that as a load failure — same as a
-        // network error — avoids an uncaught TypeError that would otherwise hang this screen on its
-        // loading spinner forever.
-        if (!value || !value.capabilities || !Array.isArray(value.comments) || !value.resource) {
-          setStatus('error')
-          return
-        }
         setSnapshot(value)
         setCommentVisibility(value.capabilities.createInternal ? 'internal' : 'client')
         setStatus('ready')

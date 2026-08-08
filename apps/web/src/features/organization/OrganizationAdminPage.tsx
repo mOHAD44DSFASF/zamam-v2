@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import { AlertTriangle, Building2, Plus, RefreshCw, UsersRound, X } from 'lucide-react'
+import { AlertTriangle, Archive, Building2, Plus, RefreshCw, UsersRound, X } from 'lucide-react'
 import { useAuth } from '../../auth/auth-context'
 import { useTenant } from '../../tenant/tenant-context'
 import {
@@ -225,17 +225,21 @@ export function OrganizationDirectoryScreen({
                       <p className="text-label text-text-secondary"><span dir="ltr">{department.code}</span> · {department.managerName ?? 'لا يوجد مدير معين'}</p>
                     </div>
                   </div>
-                  <span className="text-label font-semibold text-text-secondary">{department.activeTeamCount} فريق</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-label font-semibold text-text-secondary">{department.activeTeamCount} فريق</span>
+                    {snapshot.capabilities.archiveStructure && <button type="button" onClick={async () => { await client.archiveDepartment(organizationId, department.id, department.version); await load() }} className="inline-flex cursor-pointer items-center gap-1.5 rounded-sm px-2 py-1 text-caption font-bold text-text-tertiary transition-colors hover:bg-danger-subtle hover:text-danger"><Archive className="size-3.5" aria-hidden="true" /> أرشفة القسم</button>}
+                  </div>
                 </div>
                 <div className="divide-y divide-border-subtle rounded-md border border-t-0 border-border-subtle bg-surface">
                   {(teamsByDepartment.get(department.id) ?? []).map((team) => (
-                    <div key={team.id} className="grid gap-3 px-4 py-4 transition-colors hover:bg-surface-hover sm:grid-cols-[1fr_auto_auto] sm:items-center">
+                    <div key={team.id} className="grid gap-3 px-4 py-4 transition-colors hover:bg-surface-hover sm:grid-cols-[1fr_auto_auto_auto] sm:items-center">
                       <div className="flex items-center gap-3">
                         <UsersRound className="size-5 shrink-0 text-text-tertiary" aria-hidden="true" />
                         <div><p className="font-bold text-text-primary">{team.name}</p><p dir="ltr" className="text-left text-caption text-text-tertiary">{team.code}</p></div>
                       </div>
                       <p className="text-body text-text-secondary">{team.leaderName ?? 'دون قائد'}</p>
                       <p className="text-body font-semibold text-text-primary">{team.activeMemberCount} عضو</p>
+                      {snapshot.capabilities.archiveTeam && <button type="button" onClick={async () => { await client.archiveTeam(organizationId, team.id, team.version); await load() }} className="inline-flex cursor-pointer items-center gap-1.5 justify-self-start rounded-sm px-2 py-1 text-caption font-bold text-text-tertiary transition-colors hover:bg-danger-subtle hover:text-danger sm:justify-self-end"><Archive className="size-3.5" aria-hidden="true" /> أرشفة</button>}
                     </div>
                   ))}
                   {(teamsByDepartment.get(department.id) ?? []).length === 0 && <p className="px-4 py-5 text-body text-text-secondary">لا توجد فرق نشطة في هذا القسم.</p>}

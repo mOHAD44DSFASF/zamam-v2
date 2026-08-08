@@ -2,9 +2,9 @@ import { tenantDocumentPath } from '@zamam/firestore'
 import { TaskService, type TaskDepartmentMembersPort, type TaskReferencePort } from '../../task/service.js'
 import { TaskQueryService, SavedTaskViewService, type TaskQueryStore, type TaskSearchPort, type TaskViewScope } from '../../task/query.js'
 import type { Deps } from '../deps.js'
-import { evaluateCapabilities, listQuery, resolveNames } from '../deps.js'
+import { evaluateCapabilities, listQuery, resolveNames, resolveTaskOrProjectResource } from '../deps.js'
 import type { HandlerRegistry } from '../registry.js'
-import { requireNumber, requireString } from '../registry.js'
+import { requireBoolean, requireNumber, requireString } from '../registry.js'
 
 function createReferencePort(deps: Deps): TaskReferencePort {
   return {
@@ -180,5 +180,72 @@ export function createTaskHandlers(deps: Deps): HandlerRegistry {
       visibility: requireString(input, 'visibility') as 'private' | 'team' | 'organization',
       ...(typeof input.teamId === 'string' ? { teamId: input.teamId } : {}),
     }),
+    // Bug 3 audit: TaskService.archive() already existed with full authorization/audit/outbox wiring but
+    // had no HTTP route and no UI action — exposing it here rather than building new archive logic.
+    '/v1/tasks/archive': (context, input) => service.archive(
+      metadata(context), requireString(input, 'taskId'), requireNumber(input, 'expectedVersion'),
+    ),
+    // Bug 2 (checklist/subtask tabs were dead): addSubtask/createChecklist/setChecklistItem already existed
+    // in TaskService but had no HTTP route and no way to list what they created — both gaps closed here.
+    '/v1/subtasks/create': (context, input) => service.addSubtask(metadata(context), {
+      id: requireString(input, 'id'), taskId: requireString(input, 'taskId'), title: requireString(input, 'title'),
+      ...(typeof input.assigneeUserId === 'string' ? { assigneeUserId: input.assigneeUserId } : {}),
+    }),
+    '/v1/subtasks/set-status': (context, input) => service.setSubtaskStatus(
+      metadata(context), requireString(input, 'subtaskId'), requireNumber(input, 'expectedVersion'),
+      requireString(input, 'status') as 'ready' | 'in_progress' | 'done',
+    ),
+    '/v1/checklists/create': (context, input) => service.createChecklist(metadata(context), {
+      id: requireString(input, 'id'), taskId: requireString(input, 'taskId'), title: requireString(input, 'title'),
+      required: requireBoolean(input, 'required'),
+      items: (Array.isArray(input.items) ? input.items : []) as Parameters<typeof service.createChecklist>[1]['items'],
+    }),
+    '/v1/checklists/items/set': (context, input) => service.setChecklistItem(
+      metadata(context), requireString(input, 'itemId'), requireNumber(input, 'expectedVersion'), requireBoolean(input, 'completed'),
+    ),
+    // Read-only: lists everything the checklist/subtask tabs need for one task. Gated on the same
+    // task-visibility check the collaboration handler already uses (resolveTaskOrProjectResource +
+    // task.view) rather than a separate 'subtask.view'/'checklist.view' permission, since none is defined
+    // in the role model — subtask/checklist visibility rides on the task's own visibility.
+    '/v1/tasks/checklist-and-subtasks/query': async (context, input) => {
+      const taskId = requireString(input, 'taskId')
+      const resource = await resolveTaskOrProjectResource(deps, context.organizationId, 'task', taskId)
+      if (!resource) throw new Error('ENTITY_NOT_FOUND')
+      await deps.authorization.require(context.principal, { permission: 'task.view', organizationId: context.organizationId, resource })
+      const [subtaskPage, checklistPage] = await Promise.all([
+        listQuery(deps, context.organizationId, 'subtask', {
+          filters: [{ field: 'taskId', operator: '==', value: taskId }],
+          orderBy: [{ field: 'createdAt', direction: 'asc' }], limit: 100,
+        }),
+        listQuery(deps, context.organizationId, 'checklist', {
+          filters: [{ field: 'taskId', operator: '==', value: taskId }],
+          orderBy: [{ field: 'createdAt', direction: 'asc' }], limit: 20,
+        }),
+      ])
+      const checklistIds = checklistPage.items.map((c) => String(c.id))
+      const itemPages = checklistIds.length ? await Promise.all(checklistIds.map((checklistId) => listQuery(deps, context.organizationId, 'checklist_item', {
+        filters: [{ field: 'checklistId', operator: '==', value: checklistId }],
+        orderBy: [{ field: 'createdAt', direction: 'asc' }], limit: 100,
+      }))) : []
+      const itemsByChecklist = new Map<string, Record<string, unknown>[]>()
+      itemPages.forEach((page, index) => { itemsByChecklist.set(checklistIds[index]!, page.items as Record<string, unknown>[]) })
+      const assigneeIds = subtaskPage.items.map((s) => (typeof s.assigneeUserId === 'string' ? s.assigneeUserId : null)).filter((v): v is string => v !== null)
+      const assigneeNames = await resolveNames(deps, context.organizationId, 'user_profile', assigneeIds, 'displayName')
+      const subtasks = subtaskPage.items.map((s) => ({
+        id: String(s.id), title: String(s.title ?? ''), status: String(s.status ?? 'ready'), version: Number(s.version ?? 1),
+        ...(typeof s.assigneeUserId === 'string' ? { assigneeUserId: s.assigneeUserId, assigneeName: assigneeNames.get(s.assigneeUserId) ?? s.assigneeUserId } : {}),
+      }))
+      const checklists = checklistPage.items.map((c) => ({
+        id: String(c.id), title: String(c.title ?? ''), required: Boolean(c.required),
+        items: (itemsByChecklist.get(String(c.id)) ?? []).map((item) => ({
+          id: String(item.id), text: String(item.text ?? ''), required: Boolean(item.required),
+          completed: Boolean(item.completed), version: Number(item.version ?? 1),
+        })),
+      }))
+      const capabilities = await evaluateCapabilities(deps, context.principal, context.organizationId, {
+        manageSubtasks: 'subtask.manage', manageChecklist: 'checklist.update',
+      })
+      return { subtasks, checklists, capabilities }
+    },
   }
 }

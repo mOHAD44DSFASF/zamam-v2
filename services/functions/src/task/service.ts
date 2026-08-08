@@ -527,6 +527,27 @@ export class TaskService {
     })
   }
 
+  /** addSubtask() creates a subtask but nothing could ever mark one done — this is the missing status
+   * command, mirroring setChecklistItem's shape/permission ('subtask.manage', the same permission
+   * addSubtask itself requires) so a subtask's lifecycle is symmetric with a checklist item's. */
+  async setSubtaskStatus(metadata: TaskCommandMetadata, subtaskId: string, expectedVersion: number, status: 'ready' | 'in_progress' | 'done') {
+    id.parse(subtaskId); version.parse(expectedVersion)
+    const context = await this.authorized(metadata, 'subtask.manage')
+    return this.audit.execute(context, async (transaction) => {
+      const path = tenantDocumentPath(metadata.organizationId, 'subtask', subtaskId)
+      const subtask = await owned(transaction, path, metadata.organizationId)
+      assertExpected(subtask, expectedVersion)
+      const task = await owned(transaction, tenantDocumentPath(metadata.organizationId, 'task', String(subtask.taskId)), metadata.organizationId)
+      if (TERMINAL_TASK_STATUSES.has(task.status as TaskStatus)) throw new Error('TASK_TERMINAL_IMMUTABLE')
+      transaction.update(path, { status, version: expectedVersion + 1, updatedAt: SERVER_TIMESTAMP })
+      return {
+        result: { subtaskId, version: expectedVersion + 1, status },
+        resourceType: 'subtask', resourceId: subtaskId,
+        outbox: { type: 'subtask.status_updated', version: 1, payload: { taskId: subtask.taskId, subtaskId, status } },
+      }
+    })
+  }
+
   async assign(metadata: TaskCommandMetadata, raw: z.input<typeof assignmentSchema>) {
     const input = assignmentSchema.parse(raw)
     const context = await this.authorized(metadata, 'task.assign', input.taskId)

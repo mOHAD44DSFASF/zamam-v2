@@ -251,7 +251,13 @@ export function TaskManagementScreen({ organizationId, client, view = 'list', on
           </div>)}</aside>
       <section className="rounded-md rounded-s-none border border-r-0 border-border-subtle bg-surface p-6">{!selected ? <div className="grid min-h-72 place-items-center"><div className="flex flex-col items-center gap-2 text-center"><ClipboardList className="size-8 text-text-tertiary" aria-hidden="true" /><p className="font-bold text-text-secondary">اختر مهمة من القائمة لعرض تفاصيلها.</p></div></div> : <TaskDetails
         task={selected} snapshot={snapshot} viewerUserId={session?.userId ?? null}
+        client={client} organizationId={organizationId}
         canEdit={snapshot.capabilities.update} onEdit={() => setEditor('edit')}
+        {...(snapshot.capabilities.archive ? { onArchive: async () => {
+          setActionError('')
+          try { await client.archive(organizationId, selected.id, selected.version); setSelectedId(null); await load() }
+          catch { setActionError('تعذر أرشفة المهمة.') }
+        } } : {})}
         onCompleteStep={async () => {
           setActionError('')
           try {

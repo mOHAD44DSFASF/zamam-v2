@@ -101,5 +101,10 @@ export function createProjectHandlers(deps: Deps): HandlerRegistry {
       metadata(context), requireString(input, 'projectId'), requireNumber(input, 'expectedVersion'),
       requireString(input, 'targetStatus') as 'planned' | 'active' | 'on_hold' | 'completed' | 'cancelled',
     ),
+    // Bug 3 audit: ProjectService.archive() already existed (authorization/audit/outbox wired, capability
+    // flag already computed above as `archive`) but had no HTTP route and no UI action.
+    '/v1/projects/archive': (context, input) => service.archive(
+      metadata(context), requireString(input, 'projectId'), requireNumber(input, 'expectedVersion'),
+    ),
   }
 }

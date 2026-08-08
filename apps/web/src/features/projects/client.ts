@@ -40,6 +40,7 @@ export interface ProjectManagementClient {
   }): Promise<void>
   setClientVisibility(organizationId: string, projectId: string, expectedVersion: number, clientVisible: boolean): Promise<void>
   transition(organizationId: string, projectId: string, expectedVersion: number, targetStatus: 'planned' | 'active' | 'on_hold' | 'completed' | 'cancelled'): Promise<void>
+  archive(organizationId: string, projectId: string, expectedVersion: number): Promise<void>
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
@@ -107,4 +108,5 @@ export const projectManagementClient: ProjectManagementClient = {
     post('/v1/projects/client-visibility', { organizationId, projectId, expectedVersion, clientVisible }),
   transition: (organizationId, projectId, expectedVersion, targetStatus) =>
     post('/v1/projects/transition', { organizationId, projectId, expectedVersion, targetStatus }),
+  archive: (organizationId, projectId, expectedVersion) => post('/v1/projects/archive', { organizationId, projectId, expectedVersion }),
 }

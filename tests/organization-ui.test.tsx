@@ -59,14 +59,14 @@ describe('organization administration UI', () => {
     }
     render(<OrganizationDirectoryScreen organizationId="org-1" client={client(restricted)} />)
     expect(await screen.findByRole('heading', { name: 'لا توجد أقسام بعد' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /قسم/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'قسم' })).toBeNull()
   })
 
   it('submits a department command through the injected trusted-backend client and reloads', async () => {
     const api = client()
     render(<OrganizationDirectoryScreen organizationId="org-1" client={api} />)
     await screen.findByRole('heading', { name: 'وكالة زمام' })
-    fireEvent.click(screen.getByRole('button', { name: /قسم/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'قسم' }))
     fireEvent.change(screen.getByLabelText('الاسم'), { target: { value: 'الإنتاج' } })
     fireEvent.change(screen.getByLabelText('الرمز'), { target: { value: 'PRODUCTION' } })
     fireEvent.click(screen.getByRole('button', { name: 'حفظ' }))

@@ -52,6 +52,19 @@ export interface TaskSnapshot {
   capabilities: { create: boolean; update: boolean; transition: boolean; assign: boolean; reopen: boolean; archive: boolean; saveView: boolean }
 }
 export type TaskScope = 'self' | 'organization'
+
+export interface Subtask {
+  id: string; title: string; status: 'ready' | 'in_progress' | 'done'; version: number
+  assigneeUserId?: string; assigneeName?: string
+}
+export interface ChecklistItem { id: string; text: string; required: boolean; completed: boolean; version: number }
+export interface Checklist { id: string; title: string; required: boolean; items: readonly ChecklistItem[] }
+export interface ChecklistAndSubtasksSnapshot {
+  subtasks: readonly Subtask[]
+  checklists: readonly Checklist[]
+  capabilities: { manageSubtasks: boolean; manageChecklist: boolean }
+}
+
 export interface TaskClient {
   load(organizationId: string, scope?: TaskScope): Promise<TaskSnapshot>
   create(organizationId: string, input: {
@@ -68,6 +81,12 @@ export interface TaskClient {
   setStepDueDate(organizationId: string, input: { taskId: string; stepOrder: number; expectedVersion: number; dueAt: string | null }): Promise<void>
   saveView(organizationId: string, input: { name: string; view: 'list' | 'board' | 'calendar' | 'timeline' }): Promise<void>
   transitionWorkflow(organizationId: string, input: { instanceId: string; transitionKey: string; expectedConcurrencyVersion: number }): Promise<void>
+  archive(organizationId: string, taskId: string, expectedVersion: number): Promise<void>
+  loadChecklistAndSubtasks(organizationId: string, taskId: string): Promise<ChecklistAndSubtasksSnapshot>
+  addSubtask(organizationId: string, input: { taskId: string; title: string; assigneeUserId?: string }): Promise<void>
+  setSubtaskStatus(organizationId: string, input: { subtaskId: string; expectedVersion: number; status: Subtask['status'] }): Promise<void>
+  createChecklist(organizationId: string, input: { taskId: string; title: string; required: boolean; items: readonly { text: string; required: boolean }[] }): Promise<void>
+  setChecklistItem(organizationId: string, input: { itemId: string; expectedVersion: number; completed: boolean }): Promise<void>
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
@@ -169,4 +188,13 @@ export const taskClient: TaskClient = {
     name: input.name, filters: { presentation: input.view }, visibility: 'private',
   }),
   transitionWorkflow: (organizationId, input) => post('/v1/workflows/instances/transition', { organizationId, ...input }),
+  archive: (organizationId, taskId, expectedVersion) => post('/v1/tasks/archive', { organizationId, taskId, expectedVersion }),
+  loadChecklistAndSubtasks: (organizationId, taskId) => post('/v1/tasks/checklist-and-subtasks/query', { organizationId, taskId }),
+  addSubtask: (organizationId, input) => post('/v1/subtasks/create', { organizationId, id: crypto.randomUUID(), ...input }),
+  setSubtaskStatus: (organizationId, input) => post('/v1/subtasks/set-status', { organizationId, ...input }),
+  createChecklist: (organizationId, input) => post('/v1/checklists/create', {
+    organizationId, id: crypto.randomUUID(), taskId: input.taskId, title: input.title, required: input.required,
+    items: input.items.map((item) => ({ id: crypto.randomUUID(), ...item })),
+  }),
+  setChecklistItem: (organizationId, input) => post('/v1/checklists/items/set', { organizationId, ...input }),
 }
