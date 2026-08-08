@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { dispatchEvent, type DispatchDeps } from './dispatch.js'
 import { claimOutboxEvent, createFirestoreEventDeliveryStore, loadOutboxEvent } from './platform/event-store.js'
 import { createNotificationRecipientDirectory, type WorkerRuntime } from './compose.js'
-import { reconcileNotificationDeliveries, reconcileOutbox } from './reconcile.js'
+import { escalateStalledTasks, reconcileNotificationDeliveries, reconcileOutbox, sendDailyDigests } from './reconcile.js'
 import { getAuth } from 'firebase-admin/auth'
 
 export interface WorkerHealth {
@@ -96,6 +96,24 @@ export function createWorkerHttpHandler(runtime: WorkerRuntime) {
     if (path === '/internal/scheduled/notification-delivery') {
       const directory = createNotificationRecipientDirectory(runtime.firestore, getAuth())
       const result = await reconcileNotificationDeliveries(runtime, directory, process.env.ZAMAM_APP_BASE_URL ?? 'https://localhost')
+      return json(200, result)
+    }
+
+    if (path === '/internal/scheduled/escalate-stalled-tasks') {
+      let rawBody: string
+      try { rawBody = await readBoundedBody(request) } catch { return json(413, { error: { code: 'WORKER_REQUEST_TOO_LARGE' } }) }
+      const parsed = z.object({ organizationId: z.string().regex(/^[A-Za-z0-9_-]{2,128}$/) }).safeParse(JSON.parse(rawBody || '{}'))
+      if (!parsed.success) return json(400, { error: { code: 'ORGANIZATION_ID_REQUIRED' } })
+      const result = await escalateStalledTasks(runtime, parsed.data.organizationId)
+      return json(200, result)
+    }
+
+    if (path === '/internal/scheduled/send-daily-digests') {
+      let rawBody: string
+      try { rawBody = await readBoundedBody(request) } catch { return json(413, { error: { code: 'WORKER_REQUEST_TOO_LARGE' } }) }
+      const parsed = z.object({ organizationId: z.string().regex(/^[A-Za-z0-9_-]{2,128}$/) }).safeParse(JSON.parse(rawBody || '{}'))
+      if (!parsed.success) return json(400, { error: { code: 'ORGANIZATION_ID_REQUIRED' } })
+      const result = await sendDailyDigests(runtime, parsed.data.organizationId)
       return json(200, result)
     }
 

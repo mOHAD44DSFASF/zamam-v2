@@ -156,6 +156,7 @@ export const ENTITY_DESCRIPTORS = [
   'automation_run', 'ai_request', 'ai_action_proposal', 'audit_event', 'integration', 'webhook', 'saved_view',
   'custom_field_definition', 'custom_field_value',
   'work_template', 'recurrence_schedule', 'recurrence_run',
+  'task_stall_escalation', 'daily_digest_delivery',
 ] as const
 
 export type TenantEntityKind = typeof ENTITY_DESCRIPTORS[number]

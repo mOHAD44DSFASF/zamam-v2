@@ -79,9 +79,49 @@ const eventPolicies: Readonly<Record<string, NotificationEventPolicy>> = {
   'file.available': { titleKey: 'notification.file.available', previewKey: 'notification.open_securely', critical: false, externalAllowed: true, resourceType: 'attachment' },
   'file.quarantined': { titleKey: 'notification.file.quarantined', previewKey: 'notification.security_review', critical: true, externalAllowed: true, resourceType: 'attachment' },
   'leave.requested': { titleKey: 'notification.leave.requested', previewKey: 'notification.open_securely', critical: false, externalAllowed: true, resourceType: 'leave_request' },
-  'security.user_disabled': { titleKey: 'notification.security.user_disabled', previewKey: 'notification.security_review', critical: true, externalAllowed: true, resourceType: 'user' },
+  // Matches the event type EmployeeService.disable() actually emits ('user.disabled') — the policy key
+  // used to say 'security.user_disabled', a name nothing ever emitted, so this notification silently
+  // never fired for any disabled account.
+  'user.disabled': { titleKey: 'notification.security.user_disabled', previewKey: 'notification.security_review', critical: true, externalAllowed: true, resourceType: 'user' },
+  // Part 3B: no resourceType — a digest isn't about any single task/comment/etc, so notification.query's
+  // deep-link falls back to /notifications, which is exactly right for a summary.
+  'digest.daily': { titleKey: 'notification.digest.daily', previewKey: 'notification.digest.open', critical: false, externalAllowed: false },
 }
 
 export function notificationEventPolicy(eventType: string) {
   return eventPolicies[eventType] ?? null
+}
+
+/**
+ * Every stored notification carries titleKey/previewKey (see notification-projection.ts) — i18n message
+ * keys, not display text — but nothing ever resolved them to a string: the API handler returned the raw
+ * key, and the frontend read a `title`/`preview` field that doesn't exist on that raw shape at all, so
+ * every notification rendered with a blank title and preview. This is the missing resolution table
+ * (Arabic-only, matching the rest of this Arabic-only product — see PRODUCT.md).
+ */
+const messageLabels: Readonly<Record<string, string>> = {
+  'notification.task.created': 'تم إنشاء مهمة جديدة',
+  'notification.task.assigned': 'أُسندت إليك مهمة',
+  'notification.task.transitioned': 'تغيرت حالة مهمة',
+  'notification.task.step_arrived': 'وصلت إليك خطوة مهمة',
+  'notification.task.step_sent_back': 'أُعيدت إليك خطوة مهمة',
+  'notification.task.overdue': 'مهمة متعثرة تحتاج متابعة',
+  'notification.review.requested': 'طُلبت منك مراجعة',
+  'notification.approval.requested': 'طُلب منك اعتماد',
+  'notification.approval.completed': 'تم البت في طلب اعتماد',
+  'notification.comment.mentioned': 'أشار إليك أحدهم في تعليق',
+  'notification.file.available': 'أصبح ملف متاحًا',
+  'notification.file.quarantined': 'تم حجر ملف لمراجعة أمنية',
+  'notification.leave.requested': 'طلب إجازة بانتظار قرارك',
+  'notification.security.user_disabled': 'تم تعطيل حساب عضو',
+  'notification.open_securely': 'افتح التطبيق للاطلاع على التفاصيل.',
+  'notification.review_securely': 'افتح التطبيق لمراجعة الطلب.',
+  'notification.approval_securely': 'افتح التطبيق لاتخاذ القرار.',
+  'notification.security_review': 'يتطلب مراجعة أمنية — افتح التطبيق.',
+  'notification.digest.daily': 'ملخصك اليومي جاهز',
+  'notification.digest.open': 'افتح التطبيق لعرض مهامك ومتابعاتك لليوم.',
+}
+
+export function resolveNotificationMessage(key: string): string {
+  return messageLabels[key] ?? key
 }

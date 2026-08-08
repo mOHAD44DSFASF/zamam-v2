@@ -1,7 +1,12 @@
+import { FirebaseAtomicStore } from '@zamam/firestore'
 import { NotificationDeliveryJob, type NotificationRecipientDirectory } from './notification-delivery.js'
 import { dispatchEvent, type DispatchDeps } from './dispatch.js'
 import { claimOutboxEvent, createFirestoreEventDeliveryStore, findDueOutboxEvents, loadOutboxEvent } from './platform/event-store.js'
 import { findDueNotificationDeliveries } from './platform/notification-delivery-store.js'
+import { createFirestoreEscalationRecipientPort, createFirestoreStalledTaskLookupPort } from './platform/stalled-task-escalation-ports.js'
+import { StalledTaskEscalationService, type StalledTaskEscalationResult } from './stalled-task-escalation.js'
+import { createFirestoreDigestContentPort, createFirestoreDigestRecipientPort } from './platform/daily-digest-ports.js'
+import { DailyDigestService, type DailyDigestResult } from './daily-digest.js'
 import type { WorkerRuntime } from './compose.js'
 
 export interface OutboxReconcileResult { scanned: number; completed: number; retried: number; deadLettered: number; alreadyCompleted: number; skipped: number }
@@ -26,6 +31,25 @@ export async function reconcileOutbox(runtime: WorkerRuntime, limit = 50): Promi
     else result.deadLettered += 1
   }
   return result
+}
+
+/** Part 3A — one organization per call (mirrors every other org-scoped service in this codebase; see
+ * stalled-task-escalation.ts's own doc comment for why no cross-org scheduler exists yet). */
+export async function escalateStalledTasks(runtime: WorkerRuntime, organizationId: string): Promise<StalledTaskEscalationResult> {
+  const service = new StalledTaskEscalationService(
+    new FirebaseAtomicStore(runtime.firestore), createFirestoreStalledTaskLookupPort(runtime.firestore),
+    createFirestoreEscalationRecipientPort(runtime.firestore), { now: () => runtime.now().toISOString() },
+  )
+  return service.scan(organizationId)
+}
+
+/** Part 3B — same one-organization-per-call shape as escalateStalledTasks() above. */
+export async function sendDailyDigests(runtime: WorkerRuntime, organizationId: string): Promise<DailyDigestResult> {
+  const service = new DailyDigestService(
+    new FirebaseAtomicStore(runtime.firestore), createFirestoreDigestRecipientPort(runtime.firestore),
+    createFirestoreDigestContentPort(runtime.firestore), { now: () => runtime.now().toISOString() },
+  )
+  return service.scan(organizationId)
 }
 
 export interface NotificationDeliveryReconcileResult { organizations: number; delivered: number; retried: number; deadLettered: number }

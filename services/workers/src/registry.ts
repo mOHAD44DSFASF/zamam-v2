@@ -10,7 +10,7 @@ const NOTIFICATION_EVENT_TYPES = [
   'task.step_arrived', 'task.step_sent_back',
   'review.requested', 'approval.requested', 'approval.completed',
   'comment.created', 'file.available', 'file.quarantined',
-  'leave.requested', 'security.user_disabled',
+  'leave.requested', 'user.disabled', 'digest.daily',
 ] as const
 
 export interface EventHandlerDeps {
