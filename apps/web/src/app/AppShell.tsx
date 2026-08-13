@@ -198,6 +198,9 @@ export function AppShell() {
           </div>
         </div>
         <NavContents />
+        <p className="px-4 py-3 text-center text-caption text-text-tertiary">
+          تطوير وتنفيذ Mahmoud Walid & Mohamed ElBadry
+        </p>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -232,6 +235,9 @@ export function AppShell() {
                 </button>
               </div>
               <NavContents onNavigate={() => setMobileOpen(false)} />
+              <p className="px-4 py-3 text-center text-caption text-text-tertiary">
+                تطوير وتنفيذ Mahmoud Walid & Mohamed ElBadry
+              </p>
             </aside>
           </div>
         )}
