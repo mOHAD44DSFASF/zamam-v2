@@ -9,7 +9,8 @@ export interface TaskStep {
   assigneeDepartmentId?: string
   driveLink?: string
   dueAt?: string
-  status: 'pending' | 'in_progress' | 'done' | 'sent_back'
+  waitingReason?: string
+  status: 'pending' | 'in_progress' | 'waiting' | 'done' | 'sent_back'
   version: number
 }
 export interface TaskSummary {
@@ -26,6 +27,7 @@ export interface TaskSummary {
   driveLink: string | null
   assigneeNames: readonly string[]
   clientVisible: boolean
+  createdBy?: string
   version: number
   currentStepOrder: number
   stepCount: number
@@ -78,6 +80,11 @@ export interface TaskClient {
   }): Promise<void>
   completeStep(organizationId: string, taskId: string, expectedVersion: number): Promise<void>
   sendBackStep(organizationId: string, input: { taskId: string; expectedVersion: number; targetStepOrder: number; reason: string }): Promise<void>
+  reassignStep(organizationId: string, input: {
+    taskId: string; expectedVersion: number; assigneeType: 'person' | 'department'; assigneeUserId?: string; assigneeDepartmentId?: string; reason?: string
+  }): Promise<void>
+  setStepWaiting(organizationId: string, input: { taskId: string; expectedVersion: number; reason: string }): Promise<void>
+  resumeStep(organizationId: string, input: { taskId: string; expectedVersion: number }): Promise<void>
   setStepDueDate(organizationId: string, input: { taskId: string; stepOrder: number; expectedVersion: number; dueAt: string | null }): Promise<void>
   saveView(organizationId: string, input: { name: string; view: 'list' | 'board' | 'calendar' | 'timeline' }): Promise<void>
   transitionWorkflow(organizationId: string, input: { instanceId: string; transitionKey: string; expectedConcurrencyVersion: number }): Promise<void>
@@ -115,11 +122,11 @@ export interface RawTaskQueryResponse {
 }
 export interface RawTaskStepRecord {
   id?: unknown; order?: unknown; name?: unknown; assigneeType?: unknown
-  assigneeUserId?: unknown; assigneeDepartmentId?: unknown; driveLink?: unknown; dueAt?: unknown; status?: unknown; version?: unknown
+  assigneeUserId?: unknown; assigneeDepartmentId?: unknown; driveLink?: unknown; dueAt?: unknown; waitingReason?: unknown; status?: unknown; version?: unknown
 }
 export interface RawTaskRecord {
   id?: unknown; projectId?: unknown; departmentId?: unknown; title?: unknown; description?: unknown
-  status?: unknown; priority?: unknown; dueAt?: unknown; driveLink?: unknown; clientVisible?: unknown; version?: unknown
+  status?: unknown; priority?: unknown; dueAt?: unknown; driveLink?: unknown; clientVisible?: unknown; createdBy?: unknown; version?: unknown
   currentStepOrder?: unknown; stepCount?: unknown; steps?: readonly RawTaskStepRecord[]
 }
 
@@ -132,6 +139,7 @@ function toStep(raw: RawTaskStepRecord): TaskStep {
     ...(typeof raw.assigneeDepartmentId === 'string' ? { assigneeDepartmentId: raw.assigneeDepartmentId } : {}),
     ...(typeof raw.driveLink === 'string' ? { driveLink: raw.driveLink } : {}),
     ...(typeof raw.dueAt === 'string' ? { dueAt: raw.dueAt } : {}),
+    ...(typeof raw.waitingReason === 'string' ? { waitingReason: raw.waitingReason } : {}),
     status: (typeof raw.status === 'string' ? raw.status : 'pending') as TaskStep['status'],
     version: typeof raw.version === 'number' ? raw.version : 1,
   }
@@ -159,6 +167,7 @@ export function toTaskSnapshot(response: RawTaskQueryResponse): TaskSnapshot {
     driveLink: typeof item.driveLink === 'string' ? item.driveLink : null,
     assigneeNames: [],
     clientVisible: Boolean(item.clientVisible),
+    ...(typeof item.createdBy === 'string' ? { createdBy: item.createdBy } : {}),
     version: typeof item.version === 'number' ? item.version : 1,
     currentStepOrder: typeof item.currentStepOrder === 'number' ? item.currentStepOrder : 0,
     stepCount: typeof item.stepCount === 'number' ? item.stepCount : (item.steps?.length ?? 0),
@@ -182,6 +191,9 @@ export const taskClient: TaskClient = {
   update: (organizationId, input) => post('/v1/tasks/update', { organizationId, ...input }),
   completeStep: (organizationId, taskId, expectedVersion) => post('/v1/tasks/complete-step', { organizationId, taskId, expectedVersion }),
   sendBackStep: (organizationId, input) => post('/v1/tasks/send-back-step', { organizationId, ...input }),
+  reassignStep: (organizationId, input) => post('/v1/tasks/reassign-step', { organizationId, ...input }),
+  setStepWaiting: (organizationId, input) => post('/v1/tasks/set-waiting', { organizationId, ...input }),
+  resumeStep: (organizationId, input) => post('/v1/tasks/resume-step', { organizationId, ...input }),
   setStepDueDate: (organizationId, input) => post('/v1/tasks/steps/set-due-date', { organizationId, ...input }),
   saveView: (organizationId, input) => post('/v1/task-views/create', {
     organizationId, id: crypto.randomUUID(), resourceType: 'task',

@@ -11,6 +11,8 @@ export interface DashboardTaskRow {
   departmentId?: string
   currentStepOrder: number
   currentStepName: string
+  currentStepStatus: string
+  currentStepWaitingReason: string | null
   currentStepDueAt: string | null
   currentStepAssigneeType: 'person' | 'department'
   currentStepAssigneeUserId?: string

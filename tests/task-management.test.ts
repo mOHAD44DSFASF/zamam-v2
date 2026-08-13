@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import type { AuthorizationPrincipal, AuthorizationRequest } from '@zamam/authorization'
-import { assertTaskStatusTransition, normalizeTaskTitle } from '@zamam/domain'
-import type { AtomicStore, AtomicTransaction, StoredDocument } from '@zamam/firestore'
+import {
+  authorize, createDefaultRoles,
+  type AuthorizationPrincipal, type AuthorizationRequest, type AuthorizationScope, type TrustedRoleAssignment,
+} from '@zamam/authorization'
+import { assertTaskStatusTransition, isTaskStalled, normalizeTaskTitle } from '@zamam/domain'
+import { SERVER_TIMESTAMP, type AtomicStore, type AtomicTransaction, type StoredDocument } from '@zamam/firestore'
 import {
   TaskService, type TaskAuthorizationGate, type TaskCommandMetadata,
-  type TaskDepartmentMembersPort, type TaskReferencePort,
+  type TaskDepartmentMembersPort, type TaskReassignmentRolePort, type TaskReferencePort,
 } from '../services/functions/src'
 
 class MemoryStore implements AtomicStore {
@@ -48,6 +51,10 @@ const metadata = (actor: AuthorizationPrincipal = principal()): TaskCommandMetad
 const references = (count = 0): TaskReferencePort => ({ activeWorkflowInstanceCount: async () => count })
 const departmentsPort = (members: Readonly<Record<string, readonly string[]>> = {}): TaskDepartmentMembersPort => ({
   activeMembers: async (_organizationId, departmentId) => members[departmentId] ?? [],
+})
+const reassignmentRoles = (input: { organizationRoleUserIds?: readonly string[]; departmentLeadAssignments?: Readonly<Record<string, readonly string[]>> } = {}): TaskReassignmentRolePort => ({
+  hasActiveOrganizationManagerOrOwner: async (_organizationId, userId) => input.organizationRoleUserIds?.includes(userId) ?? false,
+  hasActiveDepartmentLead: async (_organizationId, userId, departmentId) => input.departmentLeadAssignments?.[departmentId]?.includes(userId) ?? false,
 })
 function seed(store: MemoryStore) {
   store.records.set('v2Organizations/org-1/project/project-1', { organizationId: 'org-1', status: 'active' })
@@ -278,6 +285,132 @@ describe('task step pipeline', () => {
     const service = new TaskService(store, gate, references(), departmentsPort())
     await service.create(metadata(), { id: 'task-scoped', title: 'مهمة قسم محدد', departmentId: 'dep-1', steps: oneStep })
     expect(gate.requests[0]).toMatchObject({ permission: 'task.create', resource: { departmentId: 'dep-1' } })
+  })
+})
+
+describe('task step reassignment and waiting', () => {
+  const currentStep = [{ name: 'المراجعة الحالية', assigneeType: 'person' as const, assigneeUserId: 'user-2' }]
+
+  async function serviceWithTask(store: MemoryStore, roles = reassignmentRoles()) {
+    const service = new TaskService(store, new Gate(), references(), departmentsPort({ 'dep-2': ['user-3'] }), undefined, roles)
+    await service.create(metadata(principal('user-1')), { id: 'task-reassign', title: 'مهمة تحويل', steps: currentStep })
+    return service
+  }
+
+  it('allows reassigning by each explicit authority category and rejects a principal in none of them', async () => {
+    const cases: readonly { name: string; actor: string; roles?: TaskReassignmentRolePort }[] = [
+      { name: 'current holder', actor: 'user-2' },
+      { name: 'task creator', actor: 'user-1' },
+      { name: 'organization Manager or Owner', actor: 'user-3', roles: reassignmentRoles({ organizationRoleUserIds: ['user-3'] }) },
+      { name: 'Department Lead for the current holder department', actor: 'user-3', roles: reassignmentRoles({ departmentLeadAssignments: { 'dep-1': ['user-3'] } }) },
+    ]
+    for (const scenario of cases) {
+      const store = new MemoryStore(); seed(store)
+      const service = await serviceWithTask(store, scenario.roles ?? reassignmentRoles())
+      await expect(service.reassignStep(metadata(principal(scenario.actor)), {
+        taskId: 'task-reassign', expectedVersion: 1, assigneeType: 'department', assigneeDepartmentId: 'dep-2', reason: 'إعادة توزيع العمل',
+      })).resolves.toMatchObject({ result: { version: 2 } })
+      expect(store.records.get('v2Organizations/org-1/task_step/task-reassign-step-0')).toMatchObject({
+        assigneeType: 'department', assigneeUserId: null, assigneeDepartmentId: 'dep-2', status: 'in_progress',
+      })
+    }
+
+    const store = new MemoryStore(); seed(store)
+    const service = await serviceWithTask(store)
+    await expect(service.reassignStep(metadata(principal('user-3')), {
+      taskId: 'task-reassign', expectedVersion: 1, assigneeType: 'person', assigneeUserId: 'user-1',
+    })).rejects.toThrow('REASSIGN_NOT_ELIGIBLE')
+  })
+
+  it('resets the stalled timer and records the prior/new assignees when a current step is reassigned', async () => {
+    const store = new MemoryStore(); seed(store)
+    const service = await serviceWithTask(store)
+    store.records.set('v2Organizations/org-1/task/task-reassign', {
+      ...store.records.get('v2Organizations/org-1/task/task-reassign')!, currentStepEnteredAt: '2026-08-01T00:00:00.000Z',
+    })
+    await service.reassignStep(metadata(principal('user-2')), {
+      taskId: 'task-reassign', expectedVersion: 1, assigneeType: 'person', assigneeUserId: 'user-3',
+    })
+    expect(store.records.get('v2Organizations/org-1/task/task-reassign')).toMatchObject({
+      currentStepAssigneeUserId: 'user-3', currentStepAssigneeDepartmentId: null, currentStepEnteredAt: SERVER_TIMESTAMP,
+    })
+    const event = [...store.records.entries()].find(([path, value]) => path.includes('/task_step_event/') && value.eventType === 'reassigned')
+    expect(event?.[1]).toMatchObject({ previousAssigneeType: 'person', previousAssigneeUserId: 'user-2', newAssigneeType: 'person', newAssigneeUserId: 'user-3' })
+  })
+
+  it('requires the current holder to wait/resume, clears the waiting reason, and restarts the active stalled timer on resume', async () => {
+    const store = new MemoryStore(); seed(store)
+    const service = await serviceWithTask(store)
+    store.records.set('v2Organizations/org-1/task/task-reassign', {
+      ...store.records.get('v2Organizations/org-1/task/task-reassign')!, currentStepEnteredAt: '2026-08-01T00:00:00.000Z',
+    })
+    await service.setStepWaiting(metadata(principal('user-2')), 'task-reassign', 1, 'بانتظار رد العميل')
+    expect(store.records.get('v2Organizations/org-1/task/task-reassign')).toMatchObject({
+      currentStepStatus: 'waiting', currentStepWaitingReason: 'بانتظار رد العميل', currentStepEnteredAt: '2026-08-01T00:00:00.000Z',
+    })
+    await expect(service.completeCurrentStep(metadata(principal('user-2')), 'task-reassign', 2)).rejects.toThrow('INVALID_STEP_STATUS_TRANSITION')
+    await service.resumeStep(metadata(principal('user-2')), 'task-reassign', 2)
+    expect(store.records.get('v2Organizations/org-1/task/task-reassign')).toMatchObject({
+      currentStepStatus: 'in_progress', currentStepWaitingReason: null, currentStepEnteredAt: SERVER_TIMESTAMP,
+    })
+    expect(store.records.get('v2Organizations/org-1/task_step/task-reassign-step-0')).toMatchObject({ status: 'in_progress', waitingReason: null })
+    expect(isTaskStalled({ status: 'in_progress', currentStepStatus: 'waiting', currentStepEnteredAt: '2026-08-01T00:00:00.000Z' }, Date.parse('2026-08-08T00:00:00.000Z'))).toBe(false)
+    expect(isTaskStalled({ status: 'in_progress', currentStepStatus: 'in_progress', currentStepEnteredAt: '2026-08-01T00:00:00.000Z' }, Date.parse('2026-08-08T00:00:00.000Z'))).toBe(true)
+  })
+})
+
+// Regression coverage for a real bug found in review: reassignStep's coarse authorization pre-check used to
+// call this.authorized(metadata, 'task.reassign') with NO taskId, so no resource was ever attached to the
+// request. engine.ts's scopeMatches() treats every scope type other than 'organization'/'platform' as an
+// automatic denial when no resource is present — so a DepartmentLead (scope 'department') or an ordinary
+// Employee (scope 'self') was rejected by the coarse gate before ever reaching the correct four-way
+// eligibility check below it, even though both are meant to be eligible. The mock `Gate` used everywhere
+// else in this file always grants regardless of scope, so it cannot catch this class of bug — these tests
+// exercise the real `authorize()` engine (same helper pattern as tests/authorization-engine.test.ts) instead.
+describe('reassignStep authorization against the real engine (regression for the coarse-gate bug)', () => {
+  const roles = createDefaultRoles('org-1')
+  const allRoles = Object.values(roles)
+  class RealGate {
+    constructor(private readonly assignments: readonly TrustedRoleAssignment[]) {}
+    async require(actor: AuthorizationPrincipal, request: AuthorizationRequest) {
+      const decision = authorize(actor, request, allRoles, this.assignments)
+      if (!decision.allowed) throw new Error(`AUTHORIZATION_DENIED:${decision.reason}`)
+      return decision
+    }
+  }
+  const roleAssignment = (userId: string, roleId: string, scope: AuthorizationScope): TrustedRoleAssignment => ({
+    id: `assignment:${userId}:${roleId}`, organizationId: 'org-1', userId, roleId, scope, effect: 'grant', status: 'active',
+  })
+
+  it('allows a Department-Lead-scoped grant to reassign a step currently held by their department', async () => {
+    const store = new MemoryStore(); seed(store)
+    const setupService = new TaskService(store, new Gate(), references(), departmentsPort({ 'dep-1': ['user-2'] }))
+    await setupService.create(metadata(principal('user-1')), {
+      id: 'task-real-dept', title: 'مهمة تحويل حقيقية', steps: [{ name: 'الخطوة', assigneeType: 'department' as const, assigneeDepartmentId: 'dep-1' }],
+    })
+    const realService = new TaskService(
+      store, new RealGate([roleAssignment('user-3', roles.DepartmentLead.id, { type: 'department', id: 'dep-1' })]),
+      references(), departmentsPort({ 'dep-1': ['user-2'] }), undefined,
+      reassignmentRoles({ departmentLeadAssignments: { 'dep-1': ['user-3'] } }),
+    )
+    await expect(realService.reassignStep(metadata(principal('user-3')), {
+      taskId: 'task-real-dept', expectedVersion: 1, assigneeType: 'person', assigneeUserId: 'user-1',
+    })).resolves.toMatchObject({ result: { version: 2 } })
+  })
+
+  it("allows a self-scoped Employee grant (the step's own current holder) to reassign it", async () => {
+    const store = new MemoryStore(); seed(store)
+    const setupService = new TaskService(store, new Gate(), references(), departmentsPort())
+    await setupService.create(metadata(principal('user-1')), {
+      id: 'task-real-self', title: 'مهمة تحويل حقيقية أخرى', steps: [{ name: 'الخطوة', assigneeType: 'person' as const, assigneeUserId: 'user-2' }],
+    })
+    const realService = new TaskService(
+      store, new RealGate([roleAssignment('user-2', roles.Employee.id, { type: 'self', id: 'user-2' })]),
+      references(), departmentsPort(),
+    )
+    await expect(realService.reassignStep(metadata(principal('user-2')), {
+      taskId: 'task-real-self', expectedVersion: 1, assigneeType: 'person', assigneeUserId: 'user-3',
+    })).resolves.toMatchObject({ result: { version: 2 } })
   })
 })
 

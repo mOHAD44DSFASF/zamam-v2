@@ -16,10 +16,11 @@ export function TaskManagementPage() {
   // into a specific task's pipeline instead of dead-ending — see dashboard/shared.tsx's TaskRowCard.
   const initialTaskId = params.get('task') ?? undefined
   const openSendBackFor = params.get('sendback') === '1' ? initialTaskId : undefined
+  const openReassignFor = params.get('reassign') === '1' ? initialTaskId : undefined
   if (!organizationId) return <main dir="rtl" className="grid min-h-screen place-items-center text-text-secondary">لا توجد عضوية مؤسسة نشطة.</main>
   return <TaskManagementScreen
     organizationId={organizationId} client={taskClient} view={view}
-    initialTaskId={initialTaskId} openSendBackFor={openSendBackFor}
+    initialTaskId={initialTaskId} openSendBackFor={openSendBackFor} openReassignFor={openReassignFor}
     onViewChange={(next) => {
       const updated = new URLSearchParams(params)
       updated.set('view', next)

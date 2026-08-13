@@ -34,7 +34,7 @@ export function assertTaskStatusTransition(current: TaskStatus, target: TaskStat
 
 export const TERMINAL_TASK_STATUSES: ReadonlySet<TaskStatus> = new Set(['completed', 'cancelled', 'archived'])
 
-export type TaskStepStatus = 'pending' | 'in_progress' | 'done' | 'sent_back'
+export type TaskStepStatus = 'pending' | 'in_progress' | 'waiting' | 'done' | 'sent_back'
 
 export interface TaskStepInput {
   name: string
@@ -71,16 +71,22 @@ export function assertStepsInput(steps: readonly TaskStepInput[]) {
     normalizeStepName(step.name)
     assertDriveLink(step.driveLink)
     assertTaskDueAt(step.dueAt)
-    const hasPerson = Boolean(step.assigneeUserId)
-    const hasDepartment = Boolean(step.assigneeDepartmentId)
-    if (step.assigneeType === 'person' && (!hasPerson || hasDepartment)) throw new Error('STEP_ASSIGNEE_INVALID')
-    if (step.assigneeType === 'department' && (!hasDepartment || hasPerson)) throw new Error('STEP_ASSIGNEE_INVALID')
+    assertStepAssigneeInput(step)
   }
+}
+
+/** Shared by pipeline creation and reassignment so a step always names exactly one active assignee shape. */
+export function assertStepAssigneeInput(input: Pick<TaskStepInput, 'assigneeType' | 'assigneeUserId' | 'assigneeDepartmentId'>) {
+  const hasPerson = Boolean(input.assigneeUserId)
+  const hasDepartment = Boolean(input.assigneeDepartmentId)
+  if (input.assigneeType === 'person' && (!hasPerson || hasDepartment)) throw new Error('STEP_ASSIGNEE_INVALID')
+  if (input.assigneeType === 'department' && (!hasDepartment || hasPerson)) throw new Error('STEP_ASSIGNEE_INVALID')
 }
 
 const stepTransitions: Readonly<Record<TaskStepStatus, readonly TaskStepStatus[]>> = {
   pending: ['in_progress', 'sent_back'],
-  in_progress: ['done', 'sent_back'],
+  in_progress: ['done', 'sent_back', 'waiting'],
+  waiting: ['in_progress'],
   done: [],
   sent_back: ['in_progress', 'pending'],
 }
@@ -102,6 +108,20 @@ export function normalizeSendBackReason(value: string) {
   return normalized
 }
 
+export function normalizeWaitingReason(value: string) {
+  const normalized = value.trim()
+  if (normalized.length < 3 || normalized.length > 500) throw new Error('WAITING_REASON_REQUIRED')
+  return normalized
+}
+
+/** A reassignment explanation is useful audit context but deliberately optional, unlike a send-back reason. */
+export function normalizeReassignmentReason(value?: string) {
+  const normalized = value?.trim()
+  if (!normalized) return undefined
+  if (normalized.length < 3 || normalized.length > 1_000) throw new Error('REASSIGN_REASON_INVALID')
+  return normalized
+}
+
 /** No due date set on the owner's original ask, this is the fallback: a step sitting "in_progress" for
  * longer than this many days (measured from when it BECAME the current step, not the task's last edit)
  * counts as stalled. A starting default the owner can ask to change later. */
@@ -111,6 +131,7 @@ export interface StalledCheckInput {
   status: TaskStatus
   currentStepDueAt?: string | null
   currentStepEnteredAt?: string | null
+  currentStepStatus?: string | null
 }
 
 /** Server-side (query-time) derivation — never client-only — so every dashboard that surfaces "stalled"
@@ -119,8 +140,8 @@ export interface StalledCheckInput {
  * are never stalled. */
 export function isTaskStalled(task: StalledCheckInput, now: number, thresholdDays = STALLED_STEP_DEFAULT_THRESHOLD_DAYS) {
   if (task.status !== 'in_progress') return false
+  if (task.currentStepStatus === 'waiting') return false
   if (task.currentStepDueAt) return now > Date.parse(task.currentStepDueAt)
   if (!task.currentStepEnteredAt) return false
   return now - Date.parse(task.currentStepEnteredAt) > thresholdDays * 86_400_000
 }
-

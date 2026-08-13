@@ -1,4 +1,4 @@
-import { CheckCircle2, CheckSquare, Clock3, Undo2, Zap } from 'lucide-react'
+import { CheckCircle2, CheckSquare, Clock3, Undo2, UserRoundPen, Zap } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { DashboardSnapshot, DashboardTaskRow } from './client'
 import { TaskRowCard } from './shared'
@@ -42,6 +42,7 @@ export function EmployeeDashboardView({ snapshot, onCompleteStep }: {
             {current.map((row) => <TaskRowCard key={row.taskId} row={row} actions={<div className="flex gap-2">
               <button type="button" onClick={() => onCompleteStep(row)} className="inline-flex cursor-pointer items-center gap-1 rounded-sm bg-brand-500 px-2 py-1 text-caption font-bold text-text-primary transition-all duration-150 hover:bg-brand-400 active:scale-[0.98] active:bg-brand-600"><CheckSquare className="size-3.5" aria-hidden="true" /> إكمال الخطوة</button>
               {row.currentStepOrder > 0 && <Link to={`/tasks?task=${row.taskId}&sendback=1`} className="inline-flex items-center gap-1 rounded-sm border border-border-strong px-2 py-1 text-caption font-bold text-warning transition-all duration-150 hover:bg-surface-hover active:scale-[0.98]"><Undo2 className="size-3.5" aria-hidden="true" /> إرجاع خطوة</Link>}
+              <Link to={`/tasks?task=${row.taskId}&reassign=1`} className="inline-flex items-center gap-1 rounded-sm border border-border-strong px-2 py-1 text-caption font-bold text-text-primary transition-all duration-150 hover:bg-surface-hover active:scale-[0.98]"><UserRoundPen className="size-3.5" aria-hidden="true" /> تحويل</Link>
             </div>} />)}
           </div>
         : <div className="mt-4 flex flex-col items-center gap-2 rounded-lg border border-border-subtle bg-surface px-6 py-12 text-center">

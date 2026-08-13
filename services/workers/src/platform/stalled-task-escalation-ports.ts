@@ -16,6 +16,7 @@ export function createFirestoreStalledTaskLookupPort(firestore: Firestore): Stal
           currentStepOrder: Number(data.currentStepOrder ?? 0),
           currentStepDueAt: typeof data.currentStepDueAt === 'string' ? data.currentStepDueAt : null,
           currentStepEnteredAt: typeof data.currentStepEnteredAt === 'string' ? data.currentStepEnteredAt : null,
+          currentStepStatus: typeof data.currentStepStatus === 'string' ? data.currentStepStatus : null,
           currentStepAssigneeDepartmentId: typeof data.currentStepAssigneeDepartmentId === 'string' ? data.currentStepAssigneeDepartmentId : null,
           departmentId: typeof data.departmentId === 'string' ? data.departmentId : null,
         }

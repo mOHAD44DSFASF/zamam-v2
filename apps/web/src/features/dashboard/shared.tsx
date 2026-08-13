@@ -1,4 +1,4 @@
-import { MessageCircle } from 'lucide-react'
+import { MessageCircle, PauseCircle } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { employeeDirectoryClient } from '../employees/client'
@@ -34,19 +34,21 @@ export function WhatsappButton({ row }: { row: DashboardTaskRow }) {
 }
 
 export function TaskRowCard({ row, actions }: { row: DashboardTaskRow; actions?: React.ReactNode }) {
-  return <article className={`rounded-md border p-3 text-body transition-colors ${row.stalled ? 'border-danger/40 bg-danger-subtle' : 'border-border-subtle bg-surface hover:bg-surface-hover'}`}>
+  const waiting = row.currentStepStatus === 'waiting'
+  return <article className={`rounded-md border p-3 text-body transition-colors ${row.stalled ? 'border-danger/40 bg-danger-subtle' : waiting ? 'border-border-strong bg-surface-hover' : 'border-border-subtle bg-surface hover:bg-surface-hover'}`}>
     {/* The title/summary area opens the task's pipeline — kept as a plain block-level Link (no nested
         interactive elements inside it) rather than wrapping the whole card, since the WhatsApp button and
         any action buttons below need their own independent click targets. */}
     <Link to={`/tasks?task=${row.taskId}`} className="block rounded-sm outline-offset-2">
       <div className="flex items-start justify-between gap-2">
         <p className="font-bold text-text-primary">{row.title}</p>
-        <div className="flex shrink-0 items-center gap-2">{row.stalled && <span className="rounded-sm bg-danger px-2 py-0.5 text-caption font-bold text-canvas">متعثرة</span>}<PriorityBadge priority={row.priority} /></div>
+        <div className="flex shrink-0 items-center gap-2">{row.stalled && <span className="rounded-sm bg-danger px-2 py-0.5 text-caption font-bold text-canvas">متعثرة</span>}{waiting && <span className="inline-flex items-center gap-1 rounded-sm bg-surface-raised px-2 py-0.5 text-caption font-bold text-text-secondary"><PauseCircle className="size-3" aria-hidden="true" /> معلّقة</span>}<PriorityBadge priority={row.priority} /></div>
       </div>
       <p className="mt-1 text-label text-text-secondary">
         {row.projectName ? `${row.projectName} · ` : ''}الخطوة الحالية: {row.currentStepName}
         {row.currentStepDueAt ? ` · موعدها: ${row.currentStepDueAt.slice(0, 10)}` : ''}
       </p>
+      {waiting && row.currentStepWaitingReason && <p className="mt-1 text-caption text-text-secondary">سبب التعليق: {row.currentStepWaitingReason}</p>}
     </Link>
     <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
       <WhatsappButton row={row} />

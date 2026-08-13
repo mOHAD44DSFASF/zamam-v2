@@ -59,6 +59,16 @@ describe('StalledTaskEscalationService', () => {
     expect(store.records.size).toBe(0)
   })
 
+  it('never escalates a step explicitly marked waiting, even when it has been current far past the threshold', async () => {
+    const store = new MemoryStore()
+    const service = new StalledTaskEscalationService(store, tasks([
+      { id: 'task-waiting', status: 'in_progress', currentStepOrder: 0, currentStepEnteredAt: STALE_ENTERED, currentStepStatus: 'waiting' },
+    ]), recipients(), clock)
+    const result = await service.scan('org-1')
+    expect(result).toMatchObject({ scanned: 1, alreadyStalled: 0, escalated: 0 })
+    expect(store.records.size).toBe(0)
+  })
+
   it('escalates immediately once the step\'s own due date has passed, regardless of how long it has been current', async () => {
     const store = new MemoryStore()
     const service = new StalledTaskEscalationService(store, tasks([

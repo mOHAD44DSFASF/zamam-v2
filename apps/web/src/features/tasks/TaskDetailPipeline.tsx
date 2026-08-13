@@ -1,4 +1,4 @@
-import { Archive, Check, CheckSquare, Clock3, LinkIcon, ListChecks, LoaderCircle, MessageCircle, Pencil, Plus, UserRound, Undo2 } from 'lucide-react'
+import { Archive, Check, CheckSquare, Clock3, LinkIcon, ListChecks, LoaderCircle, MessageCircle, PauseCircle, Pencil, Play, Plus, UserRound, Undo2, UserRoundPen } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { buildWhatsappLink, buildWhatsappReminderMessage } from '../../lib/whatsapp'
 import type { Checklist, Subtask, TaskClient, TaskSnapshot, TaskStep, TaskSummary } from './client'
@@ -43,12 +43,15 @@ export function WhatsappReminderButton({ task, step, snapshot }: { task: TaskSum
   </a>
 }
 
-export function StepPipeline({ task, snapshot, viewerUserId, onCompleteStep, onSendBack, onSetStepDueDate }: {
+export function StepPipeline({ task, snapshot, viewerUserId, onCompleteStep, onSendBack, onReassign, onSetWaiting, onResume, onSetStepDueDate }: {
   task: TaskSummary
   snapshot: TaskSnapshot
   viewerUserId: string | null
   onCompleteStep: () => Promise<void>
   onSendBack: () => void
+  onReassign: () => void
+  onSetWaiting: () => void
+  onResume: () => Promise<void>
   onSetStepDueDate: (order: number, expectedVersion: number, dueAt: string | null) => Promise<void>
 }) {
   const memberName = (userId?: string) => userId ? snapshot.members.find((m) => m.userId === userId)?.displayName ?? userId : ''
@@ -59,6 +62,9 @@ export function StepPipeline({ task, snapshot, viewerUserId, onCompleteStep, onS
     (current.assigneeType === 'person' && current.assigneeUserId === viewerUserId)
     || current.assigneeType === 'department'
   ))
+  // Reassignment also allows the task creator. Managers/Department Leads may be shown this control by the
+  // permissive holder heuristic; the server's audited four-way check remains the authority.
+  const viewerMightReassign = Boolean(viewerMightBeCurrentHolder || (viewerUserId && task.createdBy === viewerUserId))
   return <section aria-labelledby="task-pipeline-heading" className="mt-6 border-t border-border-subtle pt-5">
     <h3 id="task-pipeline-heading" className="text-h2 font-extrabold text-text-primary">مسار الخطوات ({isTerminal ? task.stepCount : task.currentStepOrder + 1}/{task.stepCount})</h3>
     {/* Connected chain: each step is a node on a vertical rail, not a free-floating bordered box — the
@@ -68,26 +74,30 @@ export function StepPipeline({ task, snapshot, viewerUserId, onCompleteStep, onS
         const isCurrent = step.order === task.currentStepOrder && !isTerminal
         const isDone = step.status === 'done'
         const isSentBack = step.status === 'sent_back'
+        const isWaiting = step.status === 'waiting'
         const isLast = index === task.steps.length - 1
 
         let nodeClasses = 'relative z-10 grid shrink-0 place-items-center rounded-full text-label font-extrabold transition-all duration-200 '
         if (isDone) nodeClasses += 'size-8 bg-success text-canvas'
+        else if (isWaiting) nodeClasses += 'size-10 border-2 border-border-strong bg-surface-hover text-text-secondary'
         else if (isCurrent) nodeClasses += 'size-10 bg-brand-400/20 text-brand-300 ring-2 ring-brand-400 shadow-[0_0_0_6px_rgba(29,122,153,0.18)] animate-node-settle'
         else if (isSentBack) nodeClasses += 'size-8 border-2 border-warning/60 bg-warning-subtle text-warning'
         else nodeClasses += 'size-8 border-2 border-border-strong bg-surface text-text-tertiary'
 
         const nodeContent = isDone
           ? <Check className="size-4" aria-hidden="true" />
+          : isWaiting
+            ? <PauseCircle className="size-4" aria-hidden="true" />
           : isSentBack
             ? <Undo2 className="size-3.5" aria-hidden="true" />
             : <span>{step.order + 1}</span>
 
         const pillClasses = `shrink-0 rounded-sm px-1.5 py-0.5 text-caption font-bold ${
-          isDone ? 'bg-success-subtle text-success' : isCurrent ? 'bg-brand-subtle text-brand-300' : isSentBack ? 'bg-warning-subtle text-warning' : 'bg-surface-hover text-text-secondary'
+          isDone ? 'bg-success-subtle text-success' : isWaiting ? 'bg-surface-hover text-text-secondary' : isCurrent ? 'bg-brand-subtle text-brand-300' : isSentBack ? 'bg-warning-subtle text-warning' : 'bg-surface-hover text-text-secondary'
         }`
 
         const cardClasses = `min-w-0 flex-1 rounded-md border p-3 transition-colors duration-200 ${
-          isCurrent ? 'border-brand-400/40 bg-surface-raised' : 'border-border-subtle bg-surface'
+          isWaiting ? 'border-border-strong bg-surface-hover' : isCurrent ? 'border-brand-400/40 bg-surface-raised' : 'border-border-subtle bg-surface'
         }`
 
         return <li key={step.id} className="relative pb-4 last:pb-0">
@@ -111,6 +121,9 @@ export function StepPipeline({ task, snapshot, viewerUserId, onCompleteStep, onS
                   {step.driveLink && <a href={step.driveLink} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 text-label font-semibold text-brand-300 underline underline-offset-2 hover:text-brand-400">
                     <LinkIcon className="size-3" aria-hidden="true" /> رابط Drive
                   </a>}
+                  {step.waitingReason && <p className="mt-2 flex items-start gap-1.5 text-label text-text-secondary">
+                    <PauseCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" /> <span>سبب التعليق: {step.waitingReason}</span>
+                  </p>}
                 </div>
                 {isCurrent && <WhatsappReminderButton task={task} step={step} snapshot={snapshot} />}
               </div>
@@ -123,9 +136,14 @@ export function StepPipeline({ task, snapshot, viewerUserId, onCompleteStep, onS
                     className="rounded-sm border border-border-strong bg-surface px-2 py-1 text-text-primary"
                   />
                 </label>
-                {isCurrent && viewerMightBeCurrentHolder && <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => void onCompleteStep()} className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-brand-500 px-3 py-2 text-body font-bold text-text-primary hover:bg-brand-400 active:scale-[0.98] transition-all"><CheckSquare className="size-4" aria-hidden="true" /> إنهاء الخطوة الحالية</button>
-                  {task.currentStepOrder > 0 && <button type="button" onClick={onSendBack} className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border-strong px-3 py-2 text-body font-bold text-warning hover:bg-surface-hover active:scale-[0.98] transition-all"><Undo2 className="size-4" aria-hidden="true" /> إرجاع إلى خطوة سابقة</button>}
+                {isCurrent && (viewerMightBeCurrentHolder || viewerMightReassign) && <div className="flex flex-wrap gap-2">
+                  {viewerMightBeCurrentHolder && isWaiting && <button type="button" onClick={() => void onResume()} className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-surface-raised px-3 py-2 text-body font-bold text-text-primary hover:bg-surface active:scale-[0.98] transition-all"><Play className="size-4" aria-hidden="true" /> استئناف</button>}
+                  {viewerMightBeCurrentHolder && step.status === 'in_progress' && <>
+                    <button type="button" onClick={() => void onCompleteStep()} className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-brand-500 px-3 py-2 text-body font-bold text-text-primary hover:bg-brand-400 active:scale-[0.98] transition-all"><CheckSquare className="size-4" aria-hidden="true" /> إنهاء الخطوة الحالية</button>
+                    {task.currentStepOrder > 0 && <button type="button" onClick={onSendBack} className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border-strong px-3 py-2 text-body font-bold text-warning hover:bg-surface-hover active:scale-[0.98] transition-all"><Undo2 className="size-4" aria-hidden="true" /> إرجاع إلى خطوة سابقة</button>}
+                    <button type="button" onClick={onSetWaiting} className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border-strong px-3 py-2 text-body font-bold text-text-secondary hover:bg-surface-hover active:scale-[0.98] transition-all"><PauseCircle className="size-4" aria-hidden="true" /> تعليق الخطوة</button>
+                  </>}
+                  {viewerMightReassign && <button type="button" onClick={onReassign} className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border-strong px-3 py-2 text-body font-bold text-text-primary hover:bg-surface-hover active:scale-[0.98] transition-all"><UserRoundPen className="size-4" aria-hidden="true" /> تحويل لشخص آخر</button>}
                 </div>}
               </div>
             </div>
@@ -239,7 +257,7 @@ function ChecklistPanel({ task, client, organizationId, canManage }: { task: Tas
   </div>
 }
 
-export function TaskDetails({ task, snapshot, viewerUserId, canEdit, client, organizationId, onEdit, onCompleteStep, onSendBack, onSetStepDueDate, onArchive }: {
+export function TaskDetails({ task, snapshot, viewerUserId, canEdit, client, organizationId, onEdit, onCompleteStep, onSendBack, onReassign, onSetWaiting, onResume, onSetStepDueDate, onArchive }: {
   task: TaskSummary
   snapshot: TaskSnapshot
   viewerUserId: string | null
@@ -249,6 +267,9 @@ export function TaskDetails({ task, snapshot, viewerUserId, canEdit, client, org
   onEdit: () => void
   onCompleteStep: () => Promise<void>
   onSendBack: () => void
+  onReassign: () => void
+  onSetWaiting: () => void
+  onResume: () => Promise<void>
   onSetStepDueDate: (order: number, expectedVersion: number, dueAt: string | null) => Promise<void>
   onArchive?: () => Promise<void>
 }) {
@@ -295,6 +316,6 @@ export function TaskDetails({ task, snapshot, viewerUserId, canEdit, client, org
     </>}
     {/* The pipeline stays visible under every tab, not just Overview — it's the signature screen and the
         complete/send-back actions live there; hiding it while checking off subtasks would be a regression. */}
-    <StepPipeline task={task} snapshot={snapshot} viewerUserId={viewerUserId} onCompleteStep={onCompleteStep} onSendBack={onSendBack} onSetStepDueDate={onSetStepDueDate} />
+    <StepPipeline task={task} snapshot={snapshot} viewerUserId={viewerUserId} onCompleteStep={onCompleteStep} onSendBack={onSendBack} onReassign={onReassign} onSetWaiting={onSetWaiting} onResume={onResume} onSetStepDueDate={onSetStepDueDate} />
   </>
 }

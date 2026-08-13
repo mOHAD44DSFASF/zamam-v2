@@ -26,6 +26,7 @@ export interface StalledTaskRow {
   currentStepOrder: number
   currentStepDueAt?: string | null
   currentStepEnteredAt?: string | null
+  currentStepStatus?: string | null
   currentStepAssigneeDepartmentId?: string | null
   departmentId?: string | null
 }
@@ -55,6 +56,7 @@ export class StalledTaskEscalationService {
     for (const task of rows) {
       const stalled = isTaskStalled({
         status: task.status as never,
+        currentStepStatus: task.currentStepStatus ?? null,
         currentStepDueAt: task.currentStepDueAt ?? null, currentStepEnteredAt: task.currentStepEnteredAt ?? null,
       }, now)
       if (!stalled) continue

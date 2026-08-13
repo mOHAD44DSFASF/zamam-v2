@@ -21,5 +21,5 @@ export const priorityBadgeClass = {
 export const priorityOptions = { medium: 'عادي', high: 'مهم', urgent: 'عاجل' } as const
 
 export const stepStatusLabel: Record<TaskStep['status'], string> = {
-  pending: 'قادمة', in_progress: 'جارية', done: 'منتهية', sent_back: 'أُعيدت',
+  pending: 'قادمة', in_progress: 'جارية', waiting: 'معلّقة', done: 'منتهية', sent_back: 'أُعيدت',
 }

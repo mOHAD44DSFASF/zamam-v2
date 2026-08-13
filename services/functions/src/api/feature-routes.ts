@@ -16,7 +16,7 @@ export const FEATURE_API_PATHS=[
   '/v1/clients/query','/v1/clients/create','/v1/clients/transition','/v1/clients/contacts/create','/v1/clients/contacts/eligibility',
   '/v1/projects/query','/v1/projects/create','/v1/projects/transition','/v1/projects/client-visibility','/v1/projects/archive',
   '/v1/workspaces/query','/v1/workspaces/create',
-  '/v1/tasks/query','/v1/tasks/create','/v1/tasks/update','/v1/tasks/complete-step','/v1/tasks/send-back-step','/v1/tasks/steps/set-due-date','/v1/task-views/create','/v1/workflows/instances/transition',
+  '/v1/tasks/query','/v1/tasks/create','/v1/tasks/update','/v1/tasks/complete-step','/v1/tasks/send-back-step','/v1/tasks/reassign-step','/v1/tasks/set-waiting','/v1/tasks/resume-step','/v1/tasks/steps/set-due-date','/v1/task-views/create','/v1/workflows/instances/transition',
   '/v1/tasks/archive','/v1/subtasks/create','/v1/subtasks/set-status','/v1/checklists/create','/v1/checklists/items/set','/v1/tasks/checklist-and-subtasks/query',
   '/v1/workflows/builder/query','/v1/workflows/drafts/update','/v1/workflows/simulate','/v1/workflows/publish',
   '/v1/reviews/inbox','/v1/reviews/decide',

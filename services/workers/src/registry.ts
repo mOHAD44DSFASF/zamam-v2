@@ -7,7 +7,7 @@ import type { AtomicStore } from '@zamam/firestore'
 
 const NOTIFICATION_EVENT_TYPES = [
   'task.created', 'task.assigned', 'task.transitioned', 'task.overdue',
-  'task.step_arrived', 'task.step_sent_back',
+  'task.step_arrived', 'task.step_sent_back', 'task.step_reassigned',
   'review.requested', 'approval.requested', 'approval.completed',
   'comment.created', 'file.available', 'file.quarantined',
   'leave.requested', 'user.disabled', 'digest.daily',

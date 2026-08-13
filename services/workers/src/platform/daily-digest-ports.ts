@@ -62,8 +62,9 @@ export function createFirestoreDigestContentPort(firestore: Firestore): DigestCo
         const data = doc.data()
         const dueAt = typeof data.currentStepDueAt === 'string' ? data.currentStepDueAt : null
         const enteredAt = typeof data.currentStepEnteredAt === 'string' ? data.currentStepEnteredAt : null
+        const stepStatus = typeof data.currentStepStatus === 'string' ? data.currentStepStatus : null
         if (dueAt && dueAt.slice(0, 10) === todayLocal) dueToday += 1
-        if (isTaskStalled({ status: 'in_progress', currentStepDueAt: dueAt, currentStepEnteredAt: enteredAt }, nowMs)) stalledOrOverdue += 1
+        if (isTaskStalled({ status: 'in_progress', currentStepStatus: stepStatus, currentStepDueAt: dueAt, currentStepEnteredAt: enteredAt }, nowMs)) stalledOrOverdue += 1
       }
       return { dueToday, stalledOrOverdue }
     },

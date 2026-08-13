@@ -1,8 +1,9 @@
 import type { AuthorizationPrincipal, AuthorizationRequest, Permission } from '@zamam/authorization'
 import {
   SCHEMA_VERSION, TERMINAL_TASK_STATUSES, assertDriveLink, assertSendBackTarget, assertStepStatusTransition,
-  assertStepsInput, assertTaskDueAt, assertTaskStatusTransition, normalizeSendBackReason, normalizeStepName,
-  normalizeTaskDescription, normalizeTaskTitle, type TaskStatus, type TaskStepInput, type TaskStepStatus,
+  assertStepAssigneeInput, assertStepsInput, assertTaskDueAt, assertTaskStatusTransition, normalizeReassignmentReason,
+  normalizeSendBackReason, normalizeStepName, normalizeTaskDescription, normalizeTaskTitle, normalizeWaitingReason,
+  type TaskStatus, type TaskStepInput, type TaskStepStatus,
 } from '@zamam/domain'
 import { SERVER_TIMESTAMP, tenantDocumentPath, type AtomicStore, type AtomicTransaction } from '@zamam/firestore'
 import { z } from 'zod'
@@ -41,6 +42,12 @@ const assignmentSchema = z.object({
 const sendBackSchema = z.object({
   taskId: id, expectedVersion: version, targetStepOrder: z.number().int().min(0), reason: z.string(),
 }).strict()
+const reassignStepSchema = z.object({
+  taskId: id, expectedVersion: version, assigneeType: z.enum(['person', 'department']),
+  assigneeUserId: id.optional(), assigneeDepartmentId: id.optional(), reason: z.string().optional(),
+}).strict()
+const stepWaitingSchema = z.object({ taskId: id, expectedVersion: version, reason: z.string() }).strict()
+const resumeStepSchema = z.object({ taskId: id, expectedVersion: version }).strict()
 
 export interface TaskAuthorizationGate {
   require(principal: AuthorizationPrincipal, request: AuthorizationRequest): Promise<unknown>
@@ -60,6 +67,16 @@ export interface TaskReferencePort {
  * the moment the task exists, satisfying the "past/current/future step assignee can see the task" rule. */
 export interface TaskDepartmentMembersPort {
   activeMembers(organizationId: string, departmentId: string): Promise<readonly string[]>
+}
+/** Role-assignment queries are deliberately separate from the generic authorization engine: it cannot
+ * represent the reassign rule's OR between task creator and the current holder's department scope. */
+export interface TaskReassignmentRolePort {
+  hasActiveOrganizationManagerOrOwner(organizationId: string, userId: string): Promise<boolean>
+  hasActiveDepartmentLead(organizationId: string, userId: string, departmentId: string): Promise<boolean>
+}
+const noReassignmentRoles: TaskReassignmentRolePort = {
+  hasActiveOrganizationManagerOrOwner: async () => false,
+  hasActiveDepartmentLead: async () => false,
 }
 
 const base = (organizationId: string) => ({
@@ -98,6 +115,7 @@ export class TaskService {
     private readonly references: TaskReferencePort,
     private readonly departments: TaskDepartmentMembersPort,
     audit?: AuditCommandService,
+    private readonly reassignmentRoles: TaskReassignmentRolePort = noReassignmentRoles,
   ) { this.audit = audit ?? new AuditCommandService(store) }
 
   private async authorized(metadata: TaskCommandMetadata, permission: Permission, taskId?: string, extra?: {
@@ -192,6 +210,7 @@ export class TaskService {
         currentStepName: normalizeStepName(firstStep.name), currentStepAssigneeType: firstStep.assigneeType,
         ...(firstStep.assigneeUserId ? { currentStepAssigneeUserId: firstStep.assigneeUserId } : {}),
         ...(firstStep.assigneeDepartmentId ? { currentStepAssigneeDepartmentId: firstStep.assigneeDepartmentId } : {}),
+        currentStepStatus: 'in_progress' as const, currentStepWaitingReason: null,
         currentStepDueAt: firstStep.dueAt ?? null, currentStepEnteredAt: SERVER_TIMESTAMP,
       })
       const assignedUserIds = new Set<string>()
@@ -287,10 +306,11 @@ export class TaskService {
     return this.store.runTransaction(async (transaction) => {
       const task = await owned(transaction, tenantDocumentPath(organizationId, 'task', taskId), organizationId)
       const step = await owned(transaction, stepPath(organizationId, taskId, Number(task.currentStepOrder)), organizationId)
-      const callerEmployment = step.assigneeType === 'department'
-        ? await transaction.get(tenantDocumentPath(organizationId, 'employment_profile', principalUserId))
+      const callerEmployment = await transaction.get(tenantDocumentPath(organizationId, 'employment_profile', principalUserId))
+      const currentHolderEmployment = step.assigneeType === 'person' && typeof step.assigneeUserId === 'string'
+        ? await transaction.get(tenantDocumentPath(organizationId, 'employment_profile', step.assigneeUserId))
         : null
-      return { task, step, callerEmployment }
+      return { task, step, callerEmployment, currentHolderEmployment }
     })
   }
 
@@ -325,7 +345,7 @@ export class TaskService {
       if (isLastStep) {
         transaction.update(taskPath, {
           status: 'completed', completedAt: SERVER_TIMESTAMP, version: nextVersion, updatedAt: SERVER_TIMESTAMP,
-          currentStepDueAt: null,
+          currentStepDueAt: null, currentStepStatus: 'done' as const, currentStepWaitingReason: null,
         })
       } else {
         const nextPath = stepPath(metadata.organizationId, taskId, currentOrder + 1)
@@ -335,6 +355,7 @@ export class TaskService {
           currentStepName: String(nextStep!.name), currentStepAssigneeType: nextStep!.assigneeType,
           ...(nextStep!.assigneeUserId ? { currentStepAssigneeUserId: nextStep!.assigneeUserId } : { currentStepAssigneeUserId: null }),
           ...(nextStep!.assigneeDepartmentId ? { currentStepAssigneeDepartmentId: nextStep!.assigneeDepartmentId } : { currentStepAssigneeDepartmentId: null }),
+          currentStepStatus: 'in_progress' as const, currentStepWaitingReason: null,
           currentStepDueAt: nextStep!.dueAt ?? null, currentStepEnteredAt: SERVER_TIMESTAMP,
         })
       }
@@ -391,6 +412,7 @@ export class TaskService {
         currentStepName: String(targetStep.name), currentStepAssigneeType: targetStep.assigneeType,
         ...(targetStep.assigneeUserId ? { currentStepAssigneeUserId: targetStep.assigneeUserId } : { currentStepAssigneeUserId: null }),
         ...(targetStep.assigneeDepartmentId ? { currentStepAssigneeDepartmentId: targetStep.assigneeDepartmentId } : { currentStepAssigneeDepartmentId: null }),
+        currentStepStatus: 'in_progress' as const, currentStepWaitingReason: null,
         currentStepDueAt: targetStep.dueAt ?? null, currentStepEnteredAt: SERVER_TIMESTAMP,
       })
       transaction.create(tenantDocumentPath(metadata.organizationId, 'task_step_event', stepEventId(input.taskId, currentOrder, Number(task.version))), {
@@ -405,6 +427,211 @@ export class TaskService {
         result: { taskId: input.taskId, version: nextVersion, currentStepOrder: input.targetStepOrder },
         resourceType: 'task', resourceId: input.taskId,
         outbox: { type: 'task.step_sent_back', version: 1, payload: { taskId: input.taskId, stepOrder: input.targetStepOrder, reason, ...targetAssignee } },
+      }
+    })
+  }
+
+  /** Changes only the current step's holder. The ordinary authorization gate is a coarse pre-check only —
+   * it needs a resource attached (taskId, and the step's current department when known) purely so a
+   * 'self'-scoped grant (via the ownerUserId fallback every step action already relies on) or a
+   * 'department'-scoped grant has something to match against at all; scopeMatches() treats every non-
+   * organization scope as an automatic denial when no resource is given at all (see engine.ts). The
+   * authoritative four-way rule (current holder OR task creator OR org Manager/Owner OR the current
+   * holder's Department Lead) is still the explicit check below in the audited transaction — this
+   * pre-check only has to be permissive enough not to reject a legitimate caller before reaching it. */
+  async reassignStep(metadata: TaskCommandMetadata, raw: z.input<typeof reassignStepSchema>) {
+    const input = reassignStepSchema.parse(raw)
+    assertStepAssigneeInput({
+      assigneeType: input.assigneeType,
+      ...(input.assigneeUserId ? { assigneeUserId: input.assigneeUserId } : {}),
+      ...(input.assigneeDepartmentId ? { assigneeDepartmentId: input.assigneeDepartmentId } : {}),
+    })
+    const reason = normalizeReassignmentReason(input.reason)
+    const snapshot = await this.readCurrentStepSnapshot(metadata.organizationId, input.taskId, metadata.principal.userId)
+    const priorDepartmentId = snapshot.step.assigneeType === 'department'
+      ? (typeof snapshot.step.assigneeDepartmentId === 'string' ? snapshot.step.assigneeDepartmentId : null)
+      : (typeof snapshot.currentHolderEmployment?.primaryDepartmentId === 'string' ? snapshot.currentHolderEmployment.primaryDepartmentId : null)
+    const context = await this.authorized(metadata, 'task.reassign', input.taskId, {
+      ...(priorDepartmentId ? { departmentId: priorDepartmentId } : {}),
+    })
+    const [hasOrganizationRole, hasDepartmentLeadRole] = await Promise.all([
+      this.reassignmentRoles.hasActiveOrganizationManagerOrOwner(metadata.organizationId, metadata.principal.userId),
+      priorDepartmentId
+        ? this.reassignmentRoles.hasActiveDepartmentLead(metadata.organizationId, metadata.principal.userId, priorDepartmentId)
+        : Promise.resolve(false),
+    ])
+    // Notification projection expands one department field only. Resolve both the old and new department
+    // here into an explicit recipient list, which also makes the reassignment's audience deterministic.
+    const departmentIds = [...new Set([
+      snapshot.step.assigneeType === 'department' && typeof snapshot.step.assigneeDepartmentId === 'string' ? snapshot.step.assigneeDepartmentId : null,
+      input.assigneeType === 'department' ? input.assigneeDepartmentId ?? null : null,
+    ].filter((value): value is string => Boolean(value)))]
+    const membersByDepartment = new Map<string, readonly string[]>()
+    for (const departmentId of departmentIds) {
+      membersByDepartment.set(departmentId, await this.departments.activeMembers(metadata.organizationId, departmentId))
+    }
+    const newAssigneeUserIds = input.assigneeType === 'person'
+      ? [input.assigneeUserId!]
+      : membersByDepartment.get(input.assigneeDepartmentId!) ?? []
+    const recipientUserIds = new Set<string>(newAssigneeUserIds)
+    if (snapshot.step.assigneeType === 'person' && typeof snapshot.step.assigneeUserId === 'string') {
+      recipientUserIds.add(snapshot.step.assigneeUserId)
+    }
+    if (snapshot.step.assigneeType === 'department' && typeof snapshot.step.assigneeDepartmentId === 'string') {
+      for (const userId of membersByDepartment.get(snapshot.step.assigneeDepartmentId) ?? []) recipientUserIds.add(userId)
+    }
+
+    return this.audit.execute(context, async (transaction) => {
+      const taskPath = tenantDocumentPath(metadata.organizationId, 'task', input.taskId)
+      const task = await owned(transaction, taskPath, metadata.organizationId)
+      assertExpected(task, input.expectedVersion)
+      const currentOrder = Number(task.currentStepOrder)
+      const currentStepPath = stepPath(metadata.organizationId, input.taskId, currentOrder)
+      const currentStep = await owned(transaction, currentStepPath, metadata.organizationId)
+      const callerEmployment = await transaction.get(tenantDocumentPath(metadata.organizationId, 'employment_profile', metadata.principal.userId))
+      const currentHolderEmployment = currentStep.assigneeType === 'person' && typeof currentStep.assigneeUserId === 'string'
+        ? await transaction.get(tenantDocumentPath(metadata.organizationId, 'employment_profile', currentStep.assigneeUserId))
+        : null
+      const newAssigneeEmployment = input.assigneeType === 'person'
+        ? await owned(transaction, tenantDocumentPath(metadata.organizationId, 'employment_profile', input.assigneeUserId!), metadata.organizationId)
+        : null
+      const assignmentRows = await Promise.all(newAssigneeUserIds.map(async (userId) => ({
+        userId, record: await transaction.get(assignmentPath(metadata.organizationId, input.taskId, userId)),
+      })))
+      const currentHolderDepartmentId = currentStep.assigneeType === 'department'
+        ? (typeof currentStep.assigneeDepartmentId === 'string' ? currentStep.assigneeDepartmentId : null)
+        : (typeof currentHolderEmployment?.primaryDepartmentId === 'string' ? currentHolderEmployment.primaryDepartmentId : null)
+      const eligible = stepEligibility(metadata.principal, currentStep, callerEmployment)
+        || task.createdBy === metadata.principal.userId
+        || hasOrganizationRole
+        || (Boolean(currentHolderDepartmentId) && hasDepartmentLeadRole)
+      if (!eligible) throw new Error('REASSIGN_NOT_ELIGIBLE')
+      if (newAssigneeEmployment && newAssigneeEmployment.status !== 'active') throw new Error('STEP_ASSIGNEE_NOT_ACTIVE')
+      const nextVersion = Number(task.version) + 1
+      // Write phase — no transaction.get() calls may occur below this point.
+      transaction.update(currentStepPath, {
+        assigneeType: input.assigneeType,
+        assigneeUserId: input.assigneeType === 'person' ? input.assigneeUserId! : null,
+        assigneeDepartmentId: input.assigneeType === 'department' ? input.assigneeDepartmentId! : null,
+        version: Number(currentStep.version) + 1, updatedAt: SERVER_TIMESTAMP,
+      })
+      transaction.update(taskPath, {
+        version: nextVersion, updatedAt: SERVER_TIMESTAMP,
+        currentStepAssigneeType: input.assigneeType,
+        currentStepAssigneeUserId: input.assigneeType === 'person' ? input.assigneeUserId! : null,
+        currentStepAssigneeDepartmentId: input.assigneeType === 'department' ? input.assigneeDepartmentId! : null,
+        currentStepEnteredAt: SERVER_TIMESTAMP,
+      })
+      for (const assignment of assignmentRows) {
+        if (assignment.record) continue
+        transaction.create(assignmentPath(metadata.organizationId, input.taskId, assignment.userId), {
+          ...base(metadata.organizationId), taskId: input.taskId, userId: assignment.userId,
+          assignmentRole: 'responsible' as const, assignedBy: metadata.principal.userId, status: 'accepted',
+        })
+      }
+      transaction.create(tenantDocumentPath(metadata.organizationId, 'task_step_event', stepEventId(input.taskId, currentOrder, Number(task.version))), {
+        ...base(metadata.organizationId), taskId: input.taskId, stepOrder: currentOrder, eventType: 'reassigned',
+        actorUserId: metadata.principal.userId,
+        previousAssigneeType: currentStep.assigneeType,
+        previousAssigneeUserId: currentStep.assigneeType === 'person' ? currentStep.assigneeUserId ?? null : null,
+        previousAssigneeDepartmentId: currentStep.assigneeType === 'department' ? currentStep.assigneeDepartmentId ?? null : null,
+        newAssigneeType: input.assigneeType,
+        newAssigneeUserId: input.assigneeType === 'person' ? input.assigneeUserId! : null,
+        newAssigneeDepartmentId: input.assigneeType === 'department' ? input.assigneeDepartmentId! : null,
+        ...(reason ? { reason } : {}), occurredAt: SERVER_TIMESTAMP,
+      })
+      return {
+        result: { taskId: input.taskId, version: nextVersion, currentStepOrder: currentOrder },
+        resourceType: 'task', resourceId: input.taskId,
+        outbox: {
+          type: 'task.step_reassigned', version: 1,
+          payload: {
+            taskId: input.taskId, stepOrder: currentOrder, recipientUserIds: [...recipientUserIds],
+            resourceType: 'task', resourceId: input.taskId,
+            previousAssigneeType: currentStep.assigneeType, newAssigneeType: input.assigneeType,
+            ...(reason ? { reason } : {}),
+          },
+        },
+      }
+    })
+  }
+
+  async setStepWaiting(metadata: TaskCommandMetadata, taskId: string, expectedVersion: number, rawReason: string) {
+    const input = stepWaitingSchema.parse({ taskId, expectedVersion, reason: rawReason })
+    const reason = normalizeWaitingReason(input.reason)
+    const snapshot = await this.readCurrentStepSnapshot(metadata.organizationId, input.taskId, metadata.principal.userId)
+    const eligible = stepEligibility(metadata.principal, snapshot.step, snapshot.callerEmployment)
+    const context = await this.authorized(metadata, 'task.transition', input.taskId, {
+      assigneeUserIds: eligible ? [metadata.principal.userId] : [],
+    })
+    return this.audit.execute(context, async (transaction) => {
+      const taskPath = tenantDocumentPath(metadata.organizationId, 'task', input.taskId)
+      const task = await owned(transaction, taskPath, metadata.organizationId)
+      assertExpected(task, input.expectedVersion)
+      const currentOrder = Number(task.currentStepOrder)
+      const currentStepPath = stepPath(metadata.organizationId, input.taskId, currentOrder)
+      const currentStep = await owned(transaction, currentStepPath, metadata.organizationId)
+      if (!stepEligibility(metadata.principal, currentStep, snapshot.callerEmployment)) throw new Error('STEP_HOLDER_REQUIRED')
+      assertStepStatusTransition(currentStep.status as TaskStepStatus, 'waiting')
+      const nextVersion = Number(task.version) + 1
+      // Write phase.
+      transaction.update(currentStepPath, {
+        status: 'waiting' as const, waitingReason: reason,
+        version: Number(currentStep.version) + 1, updatedAt: SERVER_TIMESTAMP,
+      })
+      transaction.update(taskPath, {
+        version: nextVersion, updatedAt: SERVER_TIMESTAMP,
+        currentStepStatus: 'waiting' as const, currentStepWaitingReason: reason,
+      })
+      transaction.create(tenantDocumentPath(metadata.organizationId, 'task_step_event', stepEventId(input.taskId, currentOrder, Number(task.version))), {
+        ...base(metadata.organizationId), taskId: input.taskId, stepOrder: currentOrder,
+        fromStatus: currentStep.status, toStatus: 'waiting', actorUserId: metadata.principal.userId,
+        reason, occurredAt: SERVER_TIMESTAMP,
+      })
+      return {
+        result: { taskId: input.taskId, version: nextVersion, currentStepOrder: currentOrder, currentStepStatus: 'waiting' as const },
+        resourceType: 'task', resourceId: input.taskId,
+        outbox: { type: 'task.updated', version: 1, payload: { taskId: input.taskId } },
+      }
+    })
+  }
+
+  async resumeStep(metadata: TaskCommandMetadata, taskId: string, expectedVersion: number) {
+    const input = resumeStepSchema.parse({ taskId, expectedVersion })
+    const snapshot = await this.readCurrentStepSnapshot(metadata.organizationId, input.taskId, metadata.principal.userId)
+    const eligible = stepEligibility(metadata.principal, snapshot.step, snapshot.callerEmployment)
+    const context = await this.authorized(metadata, 'task.transition', input.taskId, {
+      assigneeUserIds: eligible ? [metadata.principal.userId] : [],
+    })
+    return this.audit.execute(context, async (transaction) => {
+      const taskPath = tenantDocumentPath(metadata.organizationId, 'task', input.taskId)
+      const task = await owned(transaction, taskPath, metadata.organizationId)
+      assertExpected(task, input.expectedVersion)
+      const currentOrder = Number(task.currentStepOrder)
+      const currentStepPath = stepPath(metadata.organizationId, input.taskId, currentOrder)
+      const currentStep = await owned(transaction, currentStepPath, metadata.organizationId)
+      if (!stepEligibility(metadata.principal, currentStep, snapshot.callerEmployment)) throw new Error('STEP_HOLDER_REQUIRED')
+      assertStepStatusTransition(currentStep.status as TaskStepStatus, 'in_progress')
+      const nextVersion = Number(task.version) + 1
+      // Resuming starts a fresh active interval: time explicitly spent waiting never counts as stalled.
+      transaction.update(currentStepPath, {
+        status: 'in_progress' as const, waitingReason: null,
+        version: Number(currentStep.version) + 1, updatedAt: SERVER_TIMESTAMP,
+      })
+      transaction.update(taskPath, {
+        version: nextVersion, updatedAt: SERVER_TIMESTAMP,
+        currentStepStatus: 'in_progress' as const, currentStepWaitingReason: null,
+        currentStepEnteredAt: SERVER_TIMESTAMP,
+      })
+      transaction.create(tenantDocumentPath(metadata.organizationId, 'task_step_event', stepEventId(input.taskId, currentOrder, Number(task.version))), {
+        ...base(metadata.organizationId), taskId: input.taskId, stepOrder: currentOrder,
+        fromStatus: currentStep.status, toStatus: 'in_progress', actorUserId: metadata.principal.userId,
+        occurredAt: SERVER_TIMESTAMP,
+      })
+      return {
+        result: { taskId: input.taskId, version: nextVersion, currentStepOrder: currentOrder, currentStepStatus: 'in_progress' as const },
+        resourceType: 'task', resourceId: input.taskId,
+        outbox: { type: 'task.updated', version: 1, payload: { taskId: input.taskId } },
       }
     })
   }

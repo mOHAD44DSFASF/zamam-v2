@@ -63,6 +63,8 @@ export function toRow(task: Record<string, unknown>, now: number, names: {
     ...(typeof task.departmentId === 'string' ? { departmentId: task.departmentId } : {}),
     currentStepOrder: Number(task.currentStepOrder ?? 0),
     currentStepName: String(task.currentStepName ?? ''),
+    currentStepStatus: String(task.currentStepStatus ?? 'in_progress'),
+    currentStepWaitingReason: typeof task.currentStepWaitingReason === 'string' ? task.currentStepWaitingReason : null,
     currentStepDueAt: (task.currentStepDueAt as string | null) ?? null,
     currentStepAssigneeType: task.currentStepAssigneeType === 'department' ? 'department' as const : 'person' as const,
     ...(assigneeUserId ? {
@@ -72,7 +74,8 @@ export function toRow(task: Record<string, unknown>, now: number, names: {
     } : {}),
     ...(typeof task.currentStepAssigneeDepartmentId === 'string' ? { currentStepAssigneeDepartmentId: task.currentStepAssigneeDepartmentId } : {}),
     stalled: isTaskStalled({
-      status: task.status as never, currentStepDueAt: task.currentStepDueAt as string | null, currentStepEnteredAt: task.currentStepEnteredAt as string | null,
+      status: task.status as never, currentStepStatus: task.currentStepStatus as string | null,
+      currentStepDueAt: task.currentStepDueAt as string | null, currentStepEnteredAt: task.currentStepEnteredAt as string | null,
     }, now),
   }
 }

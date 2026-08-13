@@ -1,5 +1,6 @@
 import { tenantDocumentPath } from '@zamam/firestore'
-import { TaskService, type TaskDepartmentMembersPort, type TaskReferencePort } from '../../task/service.js'
+import { defaultRoleDocId } from '@zamam/authorization'
+import { TaskService, type TaskDepartmentMembersPort, type TaskReassignmentRolePort, type TaskReferencePort } from '../../task/service.js'
 import { TaskQueryService, SavedTaskViewService, type TaskQueryStore, type TaskSearchPort, type TaskViewScope } from '../../task/query.js'
 import type { Deps } from '../deps.js'
 import { evaluateCapabilities, listQuery, resolveNames, resolveTaskOrProjectResource } from '../deps.js'
@@ -33,6 +34,31 @@ function createDepartmentMembersPort(deps: Deps): TaskDepartmentMembersPort {
   }
 }
 
+/** Kept out of the generic authorization resource scope on purpose: a department-scoped DepartmentLead
+ * needs to qualify against the current holder's department OR task creation ownership, which scopeMatches()
+ * cannot express as one request. These direct role_assignment queries only supply the explicit service rule. */
+function createReassignmentRolePort(deps: Deps): TaskReassignmentRolePort {
+  const collection = (organizationId: string) => `v2Organizations/${organizationId}/role_assignment`
+  return {
+    async hasActiveOrganizationManagerOrOwner(organizationId, userId) {
+      const snapshot = await deps.firestore.collection(collection(organizationId))
+        .where('userId', '==', userId).where('status', '==', 'active').where('effect', '==', 'grant')
+        .where('scopeType', '==', 'organization')
+        .where('roleId', 'in', [defaultRoleDocId('Owner'), defaultRoleDocId('GeneralManager'), defaultRoleDocId('Manager')])
+        .limit(1).get()
+      return !snapshot.empty
+    },
+    async hasActiveDepartmentLead(organizationId, userId, departmentId) {
+      const snapshot = await deps.firestore.collection(collection(organizationId))
+        .where('userId', '==', userId).where('status', '==', 'active').where('effect', '==', 'grant')
+        .where('roleId', '==', defaultRoleDocId('DepartmentLead'))
+        .where('scopeType', '==', 'department').where('scopeId', '==', departmentId)
+        .limit(1).get()
+      return !snapshot.empty
+    },
+  }
+}
+
 function createQueryStore(deps: Deps): TaskQueryStore {
   return {
     list: (query) => deps.queries.list(`v2Organizations/${query.organizationId}/${query.entityKind}`, query),
@@ -53,11 +79,14 @@ const stepRow = (raw: Record<string, unknown>) => ({
   ...(typeof raw.assigneeDepartmentId === 'string' ? { assigneeDepartmentId: raw.assigneeDepartmentId } : {}),
   ...(typeof raw.driveLink === 'string' ? { driveLink: raw.driveLink } : {}),
   ...(typeof raw.dueAt === 'string' ? { dueAt: raw.dueAt } : {}),
+  ...(typeof raw.waitingReason === 'string' ? { waitingReason: raw.waitingReason } : {}),
   status: String(raw.status ?? 'pending'), version: Number(raw.version ?? 1),
 })
 
 export function createTaskHandlers(deps: Deps): HandlerRegistry {
-  const service = new TaskService(deps.store, deps.authorization, createReferencePort(deps), createDepartmentMembersPort(deps))
+  const service = new TaskService(
+    deps.store, deps.authorization, createReferencePort(deps), createDepartmentMembersPort(deps), undefined, createReassignmentRolePort(deps),
+  )
   const queryService = new TaskQueryService(createQueryStore(deps), deps.authorization, searchPort)
   const savedViews = new SavedTaskViewService(deps.store, deps.authorization)
   const metadata = (context: { organizationId: string; principal: unknown; correlationId: string; idempotencyKey: string; fingerprint: string }) => ({
@@ -169,6 +198,19 @@ export function createTaskHandlers(deps: Deps): HandlerRegistry {
       taskId: requireString(input, 'taskId'), expectedVersion: requireNumber(input, 'expectedVersion'),
       targetStepOrder: requireNumber(input, 'targetStepOrder'), reason: requireString(input, 'reason'),
     }),
+    '/v1/tasks/reassign-step': (context, input) => service.reassignStep(metadata(context), {
+      taskId: requireString(input, 'taskId'), expectedVersion: requireNumber(input, 'expectedVersion'),
+      assigneeType: requireString(input, 'assigneeType') as 'person' | 'department',
+      ...(typeof input.assigneeUserId === 'string' ? { assigneeUserId: input.assigneeUserId } : {}),
+      ...(typeof input.assigneeDepartmentId === 'string' ? { assigneeDepartmentId: input.assigneeDepartmentId } : {}),
+      ...(typeof input.reason === 'string' ? { reason: input.reason } : {}),
+    }),
+    '/v1/tasks/set-waiting': (context, input) => service.setStepWaiting(
+      metadata(context), requireString(input, 'taskId'), requireNumber(input, 'expectedVersion'), requireString(input, 'reason'),
+    ),
+    '/v1/tasks/resume-step': (context, input) => service.resumeStep(
+      metadata(context), requireString(input, 'taskId'), requireNumber(input, 'expectedVersion'),
+    ),
     '/v1/tasks/steps/set-due-date': (context, input) => service.setStepDueDate(metadata(context), {
       taskId: requireString(input, 'taskId'), stepOrder: requireNumber(input, 'stepOrder'),
       expectedVersion: requireNumber(input, 'expectedVersion'),

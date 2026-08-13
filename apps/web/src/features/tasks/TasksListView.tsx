@@ -1,4 +1,4 @@
-import { AlertTriangle, CalendarDays, ClipboardList, Columns3, FilterX, FolderKanban, GanttChart, Inbox, LayoutList, LoaderCircle, Plus, RefreshCw, Save, Search, SearchX } from 'lucide-react'
+import { AlertTriangle, CalendarDays, ClipboardList, Columns3, FilterX, FolderKanban, GanttChart, Inbox, LayoutList, LoaderCircle, PauseCircle, Plus, RefreshCw, Save, Search, SearchX } from 'lucide-react'
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../auth/auth-context'
@@ -51,7 +51,7 @@ function TaskAlternateView({ view, tasks, onSelectTask, canCreate, onCreateTask 
             {columnTasks.map((task) => <button key={task.id} type="button" onClick={() => onSelectTask(task.id)} className="block w-full cursor-pointer rounded-md border border-border-subtle bg-surface-raised p-3 text-right text-body transition-colors hover:border-border-strong hover:bg-surface-hover active:scale-[0.98]">
               <div className="flex items-start justify-between gap-2">
                 <p className="min-w-0 truncate font-bold text-text-primary" title={task.title}>{task.title}</p>
-                <PriorityBadge priority={task.priority} />
+                <span className="flex shrink-0 items-center gap-1"><PriorityBadge priority={task.priority} />{task.steps.find((step) => step.order === task.currentStepOrder)?.status === 'waiting' && <span className="inline-flex items-center gap-1 rounded-sm bg-surface-hover px-1.5 py-0.5 text-caption font-bold text-text-secondary"><PauseCircle className="size-3" aria-hidden="true" /> معلّقة</span>}</span>
               </div>
               <p className="mt-1 truncate text-caption text-text-secondary">{task.projectName || 'بدون مشروع'}</p>
             </button>)}
@@ -107,7 +107,71 @@ function SendBackDialog({ task, onClose, onSubmit }: {
   </div>
 }
 
-export function TaskManagementScreen({ organizationId, client, view = 'list', onViewChange, initialTaskId, openSendBackFor }: {
+function ReassignDialog({ task, snapshot, onClose, onSubmit }: {
+  task: TaskSummary
+  snapshot: TaskSnapshot
+  onClose: () => void
+  onSubmit: (input: { assigneeType: 'person' | 'department'; assigneeUserId?: string; assigneeDepartmentId?: string; reason?: string }) => Promise<void>
+}) {
+  const titleId = useId()
+  const [assigneeType, setAssigneeType] = useState<'person' | 'department'>('person')
+  const [assigneeId, setAssigneeId] = useState(snapshot.members[0]?.userId ?? '')
+  const [reason, setReason] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  useEscapeToClose(onClose)
+  const choices = assigneeType === 'person' ? snapshot.members.map((member) => ({ id: member.userId, name: member.displayName })) : snapshot.departments
+  return <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 animate-backdrop-in" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+    <form className="w-full max-w-md rounded-lg border border-border-subtle bg-surface-raised p-6 shadow-float animate-panel-in" onSubmit={async (event) => {
+      event.preventDefault()
+      setSubmitting(true)
+      try {
+        await onSubmit(assigneeType === 'person'
+          ? { assigneeType, assigneeUserId: assigneeId, ...(reason.trim() ? { reason } : {}) }
+          : { assigneeType, assigneeDepartmentId: assigneeId, ...(reason.trim() ? { reason } : {}) })
+      } finally { setSubmitting(false) }
+    }}>
+      <h2 id={titleId} className="text-h1 font-extrabold text-text-primary">تحويل الخطوة</h2>
+      <p className="mt-1 text-body text-text-secondary">اختر المسؤول الجديد عن «{task.steps.find((step) => step.order === task.currentStepOrder)?.name ?? task.title}».</p>
+      <div role="group" aria-label="نوع المُسنَد إليه" className="mt-4 inline-flex overflow-hidden rounded-md border border-border-strong bg-canvas">
+        {([['person', 'شخص'], ['department', 'قسم']] as const).map(([type, label]) => <button key={type} type="button" aria-pressed={assigneeType === type} onClick={() => { setAssigneeType(type); setAssigneeId(type === 'person' ? snapshot.members[0]?.userId ?? '' : snapshot.departments[0]?.id ?? '') }} className={toggleButtonClass}>{label}</button>)}
+      </div>
+      <label className="mt-4 block text-body font-bold text-text-primary">{assigneeType === 'person' ? 'الشخص' : 'القسم'}
+        <select required value={assigneeId} onChange={(event) => setAssigneeId(event.target.value)} className="mt-2 w-full cursor-pointer rounded-md border border-border-strong bg-canvas p-2 text-text-primary transition-colors hover:border-text-tertiary">
+          {choices.map((choice) => <option key={choice.id} value={choice.id}>{choice.name}</option>)}
+        </select>
+      </label>
+      <label className="mt-4 block text-body font-bold text-text-primary">سبب التحويل <span className="font-medium text-text-tertiary">(اختياري)</span>
+        <textarea value={reason} onChange={(event) => setReason(event.target.value)} maxLength={1000} className="mt-2 min-h-24 w-full rounded-md border border-border-strong bg-canvas p-2 text-text-primary transition-colors hover:border-text-tertiary" />
+      </label>
+      <div className="mt-6 flex justify-end gap-2">
+        <button type="button" onClick={onClose} className="cursor-pointer rounded-md border border-border-strong px-4 py-2 font-bold text-text-primary transition-colors hover:bg-surface-hover active:scale-[0.98]">إلغاء</button>
+        <button type="submit" disabled={submitting || !assigneeId} className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-brand-500 px-4 py-2 font-bold text-text-primary transition-all hover:bg-brand-400 active:scale-[0.98] active:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50">{submitting && <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />}{submitting ? 'جارٍ التحويل...' : 'تحويل'}</button>
+      </div>
+    </form>
+  </div>
+}
+
+function WaitingDialog({ task, onClose, onSubmit }: { task: TaskSummary; onClose: () => void; onSubmit: (reason: string) => Promise<void> }) {
+  const titleId = useId()
+  const [reason, setReason] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  useEscapeToClose(onClose)
+  return <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 animate-backdrop-in" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+    <form className="w-full max-w-md rounded-lg border border-border-subtle bg-surface-raised p-6 shadow-float animate-panel-in" onSubmit={async (event) => { event.preventDefault(); setSubmitting(true); try { await onSubmit(reason) } finally { setSubmitting(false) } }}>
+      <h2 id={titleId} className="text-h1 font-extrabold text-text-primary">تعليق الخطوة</h2>
+      <p className="mt-1 text-body text-text-secondary">اشرح باختصار سبب انتظار هذه الخطوة في «{task.title}».</p>
+      <label className="mt-4 block text-body font-bold text-text-primary">السبب
+        <textarea required minLength={3} maxLength={500} value={reason} onChange={(event) => setReason(event.target.value)} className="mt-2 min-h-24 w-full rounded-md border border-border-strong bg-canvas p-2 text-text-primary transition-colors hover:border-text-tertiary" />
+      </label>
+      <div className="mt-6 flex justify-end gap-2">
+        <button type="button" onClick={onClose} className="cursor-pointer rounded-md border border-border-strong px-4 py-2 font-bold text-text-primary transition-colors hover:bg-surface-hover active:scale-[0.98]">إلغاء</button>
+        <button type="submit" disabled={submitting} className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border-strong bg-surface-hover px-4 py-2 font-bold text-text-primary transition-all hover:bg-surface active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50">{submitting && <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />}{submitting ? 'جارٍ التعليق...' : 'تعليق الخطوة'}</button>
+      </div>
+    </form>
+  </div>
+}
+
+export function TaskManagementScreen({ organizationId, client, view = 'list', onViewChange, initialTaskId, openSendBackFor, openReassignFor }: {
   organizationId: string
   client: TaskClient
   view?: TaskView
@@ -117,6 +181,7 @@ export function TaskManagementScreen({ organizationId, client, view = 'list', on
   // see TaskManagementPage.tsx, which reads these from the URL's ?task=/&sendback= params.
   initialTaskId?: string
   openSendBackFor?: string
+  openReassignFor?: string
 }) {
   const { session } = useAuth()
   const [snapshot, setSnapshot] = useState<TaskSnapshot | null>(null)
@@ -124,10 +189,13 @@ export function TaskManagementScreen({ organizationId, client, view = 'list', on
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [editor, setEditor] = useState<'create' | 'edit' | null>(null)
   const [manualSendBackTarget, setManualSendBackTarget] = useState<TaskSummary | null>(null)
+  const [manualReassignTarget, setManualReassignTarget] = useState<TaskSummary | null>(null)
+  const [waitingTarget, setWaitingTarget] = useState<TaskSummary | null>(null)
   // Dismissing the deep-linked send-back dialog (?sendback=1) must not reopen it on the next render — this
   // records which openSendBackFor value was dismissed so the derived target below stays closed for it,
   // without needing an effect to sync url-derived state (see load()'s isInitial comment for the same reasoning).
   const [dismissedSendBackFor, setDismissedSendBackFor] = useState<string | null>(null)
+  const [dismissedReassignFor, setDismissedReassignFor] = useState<string | null>(null)
   const [actionError, setActionError] = useState('')
   // Area 5b: right after the current viewer advances a task's step, offer a one-shot "شارك التذكير" prompt
   // for whoever the step just landed on — cleared on the next completeStep/task switch, never persisted.
@@ -180,6 +248,14 @@ export function TaskManagementScreen({ organizationId, client, view = 'list', on
   const closeSendBack = () => {
     setManualSendBackTarget(null)
     if (openSendBackFor) setDismissedSendBackFor(openSendBackFor)
+  }
+  const deepLinkReassignTarget = openReassignFor && openReassignFor !== dismissedReassignFor
+    ? snapshot?.tasks.find((task) => task.id === openReassignFor) ?? null
+    : null
+  const reassignTarget = manualReassignTarget ?? deepLinkReassignTarget
+  const closeReassign = () => {
+    setManualReassignTarget(null)
+    if (openReassignFor) setDismissedReassignFor(openReassignFor)
   }
   // Lets a board/calendar/timeline card jump straight to the task's pipeline detail — reuses the same
   // selection state the list view already drives, just also flips the view mode back to 'list'.
@@ -237,7 +313,7 @@ export function TaskManagementScreen({ organizationId, client, view = 'list', on
     </div>
     {actionError && <div className="mx-auto mt-4 max-w-7xl px-5"><p role="alert" className="flex items-center gap-2 rounded-md border border-danger/30 bg-danger-subtle px-4 py-3 text-body font-semibold text-danger"><AlertTriangle className="size-4 shrink-0" aria-hidden="true" /> {actionError}</p></div>}
     {view === 'list' ? <div className="mx-auto grid max-w-7xl px-5 py-5 lg:grid-cols-[350px_1fr]">
-      <aside className="divide-y divide-border-subtle rounded-md border border-border-subtle bg-surface">{filteredTasks.map((task) => <button key={task.id} onClick={() => setSelectedId(task.id)} aria-current={task.id === selectedId ? 'true' : undefined} className="block w-full cursor-pointer px-4 py-4 text-right transition-colors hover:bg-surface-hover active:bg-surface-hover/80 aria-[current=true]:bg-brand-subtle"><span className="flex items-center justify-between gap-2"><span className="min-w-0 truncate font-bold text-text-primary" title={task.title}>{task.title}</span><PriorityBadge priority={task.priority} /></span><span className="mt-1 block truncate text-caption text-text-secondary">{task.projectName || 'بدون مشروع'} · {statusLabel[task.status]}</span></button>)}
+      <aside className="divide-y divide-border-subtle rounded-md border border-border-subtle bg-surface">{filteredTasks.map((task) => <button key={task.id} onClick={() => setSelectedId(task.id)} aria-current={task.id === selectedId ? 'true' : undefined} className="block w-full cursor-pointer px-4 py-4 text-right transition-colors hover:bg-surface-hover active:bg-surface-hover/80 aria-[current=true]:bg-brand-subtle"><span className="flex items-center justify-between gap-2"><span className="min-w-0 truncate font-bold text-text-primary" title={task.title}>{task.title}</span><span className="flex shrink-0 items-center gap-1"><PriorityBadge priority={task.priority} />{task.steps.find((step) => step.order === task.currentStepOrder)?.status === 'waiting' && <span className="inline-flex items-center gap-1 rounded-sm bg-surface-hover px-1.5 py-0.5 text-caption font-bold text-text-secondary"><PauseCircle className="size-3" aria-hidden="true" /> معلّقة</span>}</span></span><span className="mt-1 block truncate text-caption text-text-secondary">{task.projectName || 'بدون مشروع'} · {statusLabel[task.status]}</span></button>)}
         {filteredTasks.length === 0 && (snapshot.tasks.length === 0
           ? <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
             <div className="grid size-12 place-items-center rounded-full bg-surface-hover"><Inbox className="size-6 text-text-tertiary" aria-hidden="true" /></div>
@@ -268,6 +344,13 @@ export function TaskManagementScreen({ organizationId, client, view = 'list', on
           catch { setActionError('تعذر إكمال الخطوة. تأكد أنك الشخص أو القسم المسند إليه الدور الحالي.') }
         }}
         onSendBack={() => setManualSendBackTarget(selected)}
+        onReassign={() => setManualReassignTarget(selected)}
+        onSetWaiting={() => setWaitingTarget(selected)}
+        onResume={async () => {
+          setActionError('')
+          try { await client.resumeStep(organizationId, { taskId: selected.id, expectedVersion: selected.version }); await load() }
+          catch { setActionError('تعذّر استئناف الخطوة. تأكد أنك المسؤول الحالي عنها.') }
+        }}
         onSetStepDueDate={async (order, expectedVersion, dueAt) => {
           setActionError('')
           try { await client.setStepDueDate(organizationId, { taskId: selected.id, stepOrder: order, expectedVersion, dueAt }); await load() }
@@ -305,6 +388,20 @@ export function TaskManagementScreen({ organizationId, client, view = 'list', on
         await client.sendBackStep(organizationId, { taskId: sendBackTarget.id, expectedVersion: sendBackTarget.version, targetStepOrder, reason })
         closeSendBack(); await load()
       } catch { setActionError('تعذر إرجاع الخطوة. تأكد من السبب واختيار خطوة سابقة صحيحة.') }
+    }} />}
+    {reassignTarget && <ReassignDialog task={reassignTarget} snapshot={snapshot} onClose={closeReassign} onSubmit={async (input) => {
+      setActionError('')
+      try {
+        await client.reassignStep(organizationId, { taskId: reassignTarget.id, expectedVersion: reassignTarget.version, ...input })
+        closeReassign(); await load()
+      } catch { setActionError('تعذّر تحويل الخطوة. قد لا تكون مخولًا لتحويلها أو أن المسؤول الجديد غير صالح.') }
+    }} />}
+    {waitingTarget && <WaitingDialog task={waitingTarget} onClose={() => setWaitingTarget(null)} onSubmit={async (reason) => {
+      setActionError('')
+      try {
+        await client.setStepWaiting(organizationId, { taskId: waitingTarget.id, expectedVersion: waitingTarget.version, reason })
+        setWaitingTarget(null); await load()
+      } catch { setActionError('تعذّر تعليق الخطوة. أدخل سببًا وتأكد أنك المسؤول الحالي عنها.') }
     }} />}
   </main>
 }
