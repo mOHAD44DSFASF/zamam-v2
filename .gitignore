@@ -26,6 +26,28 @@ dist-ssr
 services/functions/deploy-dist/
 .local-run/
 
+# Test/build output
+coverage/
+tmp/
+.tmp/
+
+# Impeccable design-skill local cache/state (not shared across machines)
+.impeccable/hook.cache.json
+.impeccable/hook.pending.json
+.impeccable/config.local.json
+
+# Claude Code local runtime state (not shared across machines)
+**/.claude/scheduled_tasks.lock
+**/.claude/scheduled_tasks.json
+**/.claude/routines/.state/
+**/.claude/worktrees/
+**/.claude/checkpoints/
+**/.claude/mailbox/
+**/.claude/agent-registry.json
+**/.claude/agent-memory-local
+**/.claude/first-run
+**/.claude/assistant-daemon-state.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
